@@ -28,7 +28,6 @@ ds, ds_info = tfds.load(
 
 ds = ds.map(lambda x,y : (tf.py_function(func=pp, inp=[x, y], Tout=[tf.float32, tf.string])))
 
-
 print('')
 audio, label = next(ds.as_numpy_iterator())
 
