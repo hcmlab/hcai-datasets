@@ -1,3 +1,4 @@
+from pokemon_ds import PokemonDs
 import tensorflow_datasets as tfds
 import tensorflow as tf
 
@@ -10,7 +11,9 @@ ds, ds_info = tfds.load(
     'pokemon_ds',
     split='train',
     with_info=True,
-    as_supervised=True
+    as_supervised=True,
 )
 
+
 ds = ds.map(lambda x, y: (tf.py_function(func=pp, inp=[x, y], Tout=[tf.float32, tf.int64])))
+img = next(ds.as_numpy_iterator())[0]
