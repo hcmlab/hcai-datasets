@@ -30,7 +30,7 @@ class HcaiAudioset(tfds.core.GeneratorBasedBuilder):
 
   def _info(self) -> tfds.core.DatasetInfo:
     """Returns the dataset metadata."""
-    with open('ontology.json') as o:
+    with open(os.path.join( os.path.dirname(__file__),'ontology.json')) as o:
         ontology = json.load(o)
 
     return tfds.core.DatasetInfo(
