@@ -1,9 +1,10 @@
-from hcai_librispeech import HcaiLibrispeech
+from hcai_audioset import HcaiAudioset
 import tensorflow_datasets as tfds
 import tensorflow as tf
 import pydub
-import numpy as np
 import soundfile as sf
+import numpy as np
+
 
 def pp(x,y):
     file_path = bytes.decode(x.numpy())
@@ -15,27 +16,22 @@ def pp(x,y):
     a = a.set_channels(1)
     a = np.array(a.get_array_of_samples())
     a = a.astype(np.int16)
-    return audio, label
+
+    return a, y
 
 ds, ds_info = tfds.load(
-    'hcai_librispeech',
-    split='dev-clean',
+    'hcai_audioset',
+    split='train',
     with_info=True,
     as_supervised=True,
     decoders={
-       'speech': tfds.decode.SkipDecoding()
+       'audio': tfds.decode.SkipDecoding()
     }
 )
 
-#"speech": tfds.features.Text(),
-#"text": tfds.features.Text(),
-#"speaker_id": tf.int64,
-#"chapter_id": tf.int64,
-#"id": tf.string,
-
-ds = ds.map(lambda x,y : (tf.py_function(func=pp, inp=[x, y], Tout=[tf.float32, tf.string])))
+ds = ds.map(lambda x,y : (tf.py_function(func=pp, inp=[x, y], Tout=[tf.int16, tf.int64])))
 
 print('')
 audio, label = next(ds.as_numpy_iterator())
 
-sf.write('test.flac', audio, 16000, format='wav')
+sf.write('test.wav', audio, 16000, format='wav')
