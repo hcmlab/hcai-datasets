@@ -1,0 +1,1 @@
+This repository contains code to make datasets stored on th corpora network drive of the chair compatible with the [tensorflow dataset api](https://www.tensorflow.org/api_docs/python/tf/data/Dataset) .
