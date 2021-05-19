@@ -26,7 +26,7 @@ class HcaiCkplus(tfds.core.GeneratorBasedBuilder):
     '1.0.0': 'Initial release.',
   }
 
-  def __init__(self, *, dataset_dir=os.path.join('\\\\137.250.171.12', 'Korpora', 'CK+'), **kwargs):
+  def __init__(self, *, dataset_dir=None, **kwargs):
     self.dataset_dir = dataset_dir
     self.labels = ['neutral', 'anger', 'contempt', 'disgust', 'fear', 'happy', 'sadness', 'suprise']
     super(HcaiCkplus, self).__init__(**kwargs)

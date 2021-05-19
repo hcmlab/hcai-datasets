@@ -26,9 +26,9 @@ class HcaiFaces(tfds.core.GeneratorBasedBuilder):
     '1.0.0': 'Initial release.',
   }
 
-  def __init__(self, *, dataset_dir=os.path.join('\\\\137.250.171.12', 'Korpora', 'FACES', 'bilder'), **kwargs):
+  def __init__(self, *, dataset_dir=None, **kwargs):
     super(HcaiFaces, self).__init__(**kwargs)
-    self.dataset_dir = dataset_dir
+    self.dataset_dir = os.path.join(dataset_dir, 'bilder')
 
   def _info(self) -> tfds.core.DatasetInfo:
     """Returns the dataset metadata."""
