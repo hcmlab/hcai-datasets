@@ -1,3 +1,1 @@
-"""hcai_audioset dataset."""
-
-from .hcai_audioset import HcaiAudioset
+from hcai_datasets.hcai_audioset.hcai_audioset import HcaiAudioset

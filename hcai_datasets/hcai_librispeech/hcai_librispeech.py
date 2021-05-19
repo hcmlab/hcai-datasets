@@ -53,6 +53,7 @@ class HcaiLibrispeech(tfds.core.GeneratorBasedBuilder):
             metadata=tfds.core.MetadataDict(sample_rate=16000,)
         )
 
+
     def _populate_metadata(self, directory):
         # All dirs contain the same metadata.
         self.info.metadata["speakers"] = self._read_metadata_file(
