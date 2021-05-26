@@ -39,20 +39,3 @@ def open_file_reader(path, feature_type):
 def close_file_reader(reader, feature_type):
   if feature_type == DataTypes.VIDEO:
     return reader.release()
-
-if __name__ == '__main__':
-  test_vid_path_in = r'Z:\nova\data\DFG_A1_A2b\NP001\caretaker.video.mp4'
-  test_vid_path_out = r'chunk.mp4'
-  fps = 25
-  start_time_seconds = 1
-  end_time_seconds = 15.5
-  vcap = cv2.VideoCapture(test_vid_path_in)
-  start_frame = time_to_frame(fps, start_time_seconds)
-  end_frame = time_to_frame(fps, end_time_seconds)
-  chunk = chunk_vid(vcap, start_frame, end_frame)
-
-  from matplotlib import pyplot as plt
-  for i, f in enumerate(chunk):
-    if i % fps == 0:
-      plt.imshow(f)
-      plt.show()
