@@ -1,41 +1,55 @@
-from hcai_librispeech import HcaiLibrispeech
+import hcai_datasets
 import tensorflow_datasets as tfds
 import tensorflow as tf
 import pydub
 import numpy as np
 import soundfile as sf
+import os
+import tensorflow_io as tfio
 
-def pp(x,y):
+def pp_supervised(x,y):
     file_path = bytes.decode(x.numpy())
-    print(file_path)
-    ext = file_path.split('.')[-1]
+    audio, sr = sf.read(file_path)
+    return audio, sr, y
 
-    a = pydub.AudioSegment.from_file(file_path, ext)
-    a = a.set_frame_rate(16000)
-    a = a.set_channels(1)
-    a = np.array(a.get_array_of_samples())
-    a = a.astype(np.int16)
-    return audio, label
+def pp(speech, text, speaker_id, chapter_id, id):
+    file_path = bytes.decode(speech.numpy())
+    audio, sr = sf.read(file_path)
+    return audio, sr, text, speaker_id, chapter_id, id
+
+@tf.function
+def load_wav_16k_mono(filename):
+    """ read in a waveform file and convert to 16 kHz mono """
+
+    file_contents = tf.io.read_file(filename)
+    wav, sample_rate = tf.audio.decode_wav(
+        file_contents,
+        desired_channels=1)
+    wav = tf.squeeze(wav, axis=-1)
+    sample_rate = tf.cast(sample_rate, dtype=tf.int64)
+    wav = tfio.audio.resample(wav, rate_in=sample_rate, rate_out=16000)
+    return wav
+
+def pp_tf(speech):
+    audio = load_wav_16k_mono(speech)
+    return audio
 
 ds, ds_info = tfds.load(
     'hcai_librispeech',
     split='dev-clean',
     with_info=True,
-    as_supervised=True,
+    as_supervised=False,
     decoders={
        'speech': tfds.decode.SkipDecoding()
-    }
+    },
+    builder_kwargs={'dataset_dir': os.path.join('\\\\137.250.171.12', 'Librispeech')}
 )
 
-#"speech": tfds.features.Text(),
-#"text": tfds.features.Text(),
-#"speaker_id": tf.int64,
-#"chapter_id": tf.int64,
-#"id": tf.string,
 
-ds = ds.map(lambda x,y : (tf.py_function(func=pp, inp=[x, y], Tout=[tf.float32, tf.string])))
+ds = ds.map(lambda x : (tf.py_function(func=pp, inp=[x['speech'], x['text'], x['speaker_id'], x['chapter_id'], x['id']], Tout=[tf.float32, tf.int16, tf.string, tf.int64, tf.int64,  tf.string])))
+#ds = ds.map(lambda x, y: (pp_tf(x), y))
 
 print('')
-audio, label = next(ds.as_numpy_iterator())
+audio, sr, text, speaker_id, chapter_id, id = next(ds.as_numpy_iterator())
 
-sf.write('test.flac', audio, 16000, format='wav')
+sf.write('test.flac', audio, sr, format='wav')

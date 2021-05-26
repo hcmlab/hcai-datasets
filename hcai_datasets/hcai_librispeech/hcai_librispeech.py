@@ -5,14 +5,12 @@ import tensorflow as tf
 import pathlib
 import os
 
-# TODO(hcai_librispeech): Markdown description  that will appear on the catalog page.
 _DESCRIPTION = """
 LibriSpeech is a corpus of approximately 1000 hours of read English speech with sampling rate of 16 kHz,
 prepared by Vassil Panayotov with the assistance of Daniel Povey. The data is derived from read
 audiobooks from the LibriVox project, and has been carefully segmented and aligned.87
 """
 
-# TODO(hcai_librispeech): BibTeX citation
 _CITATION = """
   title={Librispeech: an ASR corpus based on public domain audio books},
   author={Panayotov, Vassil and Chen, Guoguo and Povey, Daniel and Khudanpur, Sanjeev},
@@ -22,7 +20,6 @@ _CITATION = """
   organization={IEEE}
 }"""
 
-
 class HcaiLibrispeech(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for hcai_librispeech dataset."""
 
@@ -31,9 +28,12 @@ class HcaiLibrispeech(tfds.core.GeneratorBasedBuilder):
       '1.0.0': 'Initial release.',
     }
 
+    def __init__(self, *, dataset_dir=None, **kwargs):
+        super(HcaiLibrispeech, self).__init__(**kwargs)
+        self.dataset_dir = os.path.join(dataset_dir)
+
     def _info(self) -> tfds.core.DatasetInfo:
         """Returns the dataset metadata."""
-        # TODO(hcai_librispeech): Specifies the tfds.core.DatasetInfo object
         return tfds.core.DatasetInfo(
             builder=self,
             description=_DESCRIPTION,
@@ -50,9 +50,8 @@ class HcaiLibrispeech(tfds.core.GeneratorBasedBuilder):
             supervised_keys=('speech', 'text'),  # Set to `None` to disable
             homepage='https://dataset-homepage/',
             citation=_CITATION,
-            metadata=tfds.core.MetadataDict(sample_rate=16000,)
+            metadata=tfds.core.MetadataDict(sample_rate=16000,),
         )
-
 
     def _populate_metadata(self, directory):
         # All dirs contain the same metadata.
@@ -79,11 +78,10 @@ class HcaiLibrispeech(tfds.core.GeneratorBasedBuilder):
 
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
-        extracted_dirs = pathlib.Path(r'Z:\LibriSpeech')
-        self._populate_metadata(extracted_dirs)
+        self._populate_metadata()
 
         splits = ['dev-clean', 'dev-other', 'test-clean', 'test-other', 'train-clean-100', 'train-clean-360', 'train-other-500']
-        return { s: self._generate_examples(extracted_dirs / 'Librispeech' / s) for s in splits }
+        return { s: self._generate_examples(self.dataset_dir / 'Librispeech' / s) for s in splits }
 
     def _generate_examples(self, directory):
         transcripts_glob = os.path.join(directory, "*/*/*.txt")
