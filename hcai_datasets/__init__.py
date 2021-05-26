@@ -6,3 +6,6 @@ from hcai_datasets import hcai_faces
 from hcai_datasets import hcai_audioset
 from hcai_datasets import hcai_librispeech
 from hcai_datasets import hcai_is2021_ess
+
+'''Nova Datasets'''
+from hcai_datasets import hcai_nova_dynamic
