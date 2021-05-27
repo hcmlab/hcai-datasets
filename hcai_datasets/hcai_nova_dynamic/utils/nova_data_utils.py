@@ -1,7 +1,9 @@
 import cv2
 import numpy as np
 import tensorflow_datasets as tfds
-from hcai_datasets.hcai_nova_dynamic.defines import DataTypes
+from hcai_datasets.hcai_nova_dynamic.utils import nova_data_types as ndt
+from hcai_datasets.hcai_nova_dynamic.utils.ssi_stream_utils import Stream
+
 
 def frame_to_time(sr: int, frame: int):
   return frame / sr
@@ -18,7 +20,6 @@ def chunk_vid(vcap: cv2.VideoCapture, start_frame: int, end_frame: int):
   heigth = int(vcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
   depth = 3
   length = end_frame - start_frame
-
   chunk = np.zeros( (length, heigth, width, depth), dtype=np.uint8)
 
   for i in range(length):
@@ -32,10 +33,17 @@ def chunk_vid(vcap: cv2.VideoCapture, start_frame: int, end_frame: int):
 
   return chunk
 
+def chunk_stream(stream: Stream, start_frame: int, end_frame: int):
+  return stream.data[start_frame:end_frame]
+
 def open_file_reader(path, feature_type):
-  if feature_type == DataTypes.VIDEO:
+  if feature_type == ndt.DataTypes.video:
     return cv2.VideoCapture(path)
+  elif feature_type == ndt.DataTypes.audio:
+    return NotImplementedError('Filereader for audio features is not yet implemented')
+  elif feature_type == ndt.DataTypes.feature:
+    return Stream(path)
 
 def close_file_reader(reader, feature_type):
-  if feature_type == DataTypes.VIDEO:
+  if feature_type == ndt.DataTypes.video:
     return reader.release()

@@ -10,6 +10,7 @@ This repository contains code to make datasets stored on th corpora network driv
 | faces         | ✅             |    https://faces.mpdl.mpg.de/imeji/ |
 | is2021_ess    | ❌             |    -|
 | librispeech   | ❌              |    https://www.openslr.org/12 |
+| nova_dynamic   | ✅              |    https://github.com/hcmlab/nova |
 
 
 ### Example Usage

@@ -6,8 +6,8 @@ import cv2
 import sys
 import numpy as np
 from hcai_datasets.hcai_nova_dynamic.nova_db_handler import NovaDBHandler
-from hcai_datasets.hcai_nova_dynamic import data_utils
-from hcai_datasets.hcai_nova_dynamic.defines import DataTypes
+from hcai_datasets.hcai_nova_dynamic.utils import nova_data_utils
+import hcai_datasets.hcai_nova_dynamic.utils.nova_data_types as ndt
 
 # TODO(hcai_audioset): Markdown description  that will appear on the catalog page.
 _DESCRIPTION = """
@@ -33,7 +33,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
   }
 
   def __init__(self, *, db_config_path=None, db_config_dict=None, dataset=None, nova_data_dir=None, sessions=None, annotator=None,
-               schemes=None, roles=None, data_streams=None, start=0, end=sys.float_info.max, left_context, right_context, frame_step, **kwargs):
+               schemes=None, roles=None, data_streams=None, start=0, end=sys.float_info.max, left_context, right_context, frame_step, flatten_samples, supervised_keys=None, **kwargs):
     """
     Initialize the HcaiNovaDynamic dataset builder
     Args:
@@ -59,6 +59,9 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
     self.frame_step = frame_step
     self.start = start
     self.end = end
+    self.flatten_samples = flatten_samples
+    self.supervised_keys = supervised_keys
+
     self.nova_db_handler = NovaDBHandler(db_config_path, db_config_dict)
 
     mongo_schemes = self.nova_db_handler.get_schemes(dataset=dataset, schemes=schemes)
@@ -80,7 +83,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         # If there's a common (input, target) tuple from the
         # features, specify them here. They'll be used if
         # `as_supervised=True` in `builder.as_dataset`.
-        supervised_keys=(None),  # Set to `None` to disable
+        supervised_keys=tuple(self.supervised_keys),  # Set to `None` to disable
         homepage='https://github.com/hcmlab/nova',
         citation=_CITATION
       )
@@ -109,22 +112,32 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
   def _get_data_info_from_mongo_doc(self, mongo_data_streams):
       data_info = {}
+
       for data in mongo_data_streams:
         for role in self.roles:
-          if data['type'] == 'video':
-            # We can use any role for testing since Nova assumes that there will be a stream for every role
-            role = self.roles[0]
-            sample_stream_name = role + '.' + data['name'] + '.' + data['fileExt']
-            sample_stream_path = os.path.join(self.nova_data_dir, self.dataset, self.sessions[0], sample_stream_name)
+          # We can use any role for testing since Nova assumes that there will be a stream for every role
+          sample_stream_name = role + '.' + data['name'] + '.' + data['fileExt']
+          sample_stream_path = os.path.join(self.nova_data_dir, self.dataset, self.sessions[0], sample_stream_name)
+          data_id = role + '.' + data['name']
+          dtype = ndt.string_to_enum(ndt.DataTypes, data['type'])
+          feature_connector = None
+          if dtype == ndt.DataTypes.video:
             res = self._get_video_resolution(sample_stream_path)
             # shape is (None, H, W, C) - We assume that we always have three channels
             data_shape = (None, ) + res + (3, )
-            data_id = role + '.' + data['name']
-            data_info[data_id] = {'feature' : tfds.features.Video(data_shape), 'file': sample_stream_name, 'sr': data['sr'], 'type': DataTypes.VIDEO}
-          elif data['type'] == 'audio':
-            pass
+            feature_connector = tfds.features.Video(data_shape)
+          elif dtype == ndt.DataTypes.audio:
+            raise NotImplementedError('Audio files are not yet supported')
+
+          elif dtype == ndt.DataTypes.feature:
+            stream = nova_data_utils.Stream().load_header(sample_stream_path)
+            data_shape = (stream.dim, )
+            data_type = stream.tftype
+            feature_connector = tfds.features.Sequence(tfds.features.Tensor(shape=data_shape, dtype=data_type))
           else:
             raise ValueError('Invalid data type {}'.format(data['type']))
+
+          data_info[data_id] = {'feature' : feature_connector, 'file': sample_stream_name, 'sr': data['sr'], 'type': dtype}
 
       return data_info
 
@@ -148,10 +161,16 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
       return annos_for_sample[majority_sample_idx]['id']
 
   def _get_data_for_frame(self, file_reader, feature_type, sr, start, end):
-    start_frame = data_utils.time_to_frame(sr, start)
-    end_frame = data_utils.time_to_frame(sr, end)
-    if feature_type == DataTypes.VIDEO:
-      return data_utils.chunk_vid(file_reader, start_frame, end_frame)
+    start_frame = nova_data_utils.time_to_frame(sr, start)
+    end_frame = nova_data_utils.time_to_frame(sr, end)
+    if feature_type == ndt.DataTypes.video:
+      return nova_data_utils.chunk_vid(file_reader, start_frame, end_frame)
+    elif feature_type == ndt.DataTypes.audio:
+      raise NotImplementedError('data chunking for audio is not yet implemented')
+    elif feature_type == ndt.DataTypes.feature:
+      return nova_data_utils.chunk_stream(file_reader, start_frame, end_frame)
+
+
 
   def _generate_examples(self):
     """Yields examples."""
@@ -172,7 +191,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
         if not os.path.isfile(data_path):
           raise FileNotFoundError('No datastream found at {}'.format(data_path))
-        file_reader = data_utils.open_file_reader(data_path, feature_info['type'])
+        file_reader = nova_data_utils.open_file_reader(data_path, feature_info['type'])
         data[d] = file_reader
 
       session_info = self.nova_db_handler.get_session_info(self.dataset, session)[0]
@@ -181,6 +200,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
       # current position of the last frame in seconds
       c_pos = 0
 
+      #TODO: frame starts at end of left context!
       # increase current position till we reach the first frame
       while c_pos - (self.left_context + self.frame_step) < self.start:
         c_pos += self.frame_step
@@ -194,9 +214,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         labels_for_sample = [{ k: self._get_label_for_frame(v, sample_start, sample_end)} for k, v in annotation.items()]
         data_for_sample = [{ k: self._get_data_for_frame(v, self._info_data[k]['type'], self._info_data[k]['sr'], sample_start, sample_end)} for k, v in data.items()]
 
-        #sample_dict = {
-        #  'video' : np.ones( (20,288,180,3), dtype=np.uint8)
-        #}
+
         sample_dict = {}
         for l in labels_for_sample:
           sample_dict.update(l)
@@ -209,4 +227,4 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
       # closing file readers for this session
       for d, fr in data.items():
-        data_utils.close_file_reader(fr, self._info_data[d]['feature'])
+        nova_data_utils.close_file_reader(fr, self._info_data[d]['feature'])

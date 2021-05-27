@@ -17,12 +17,15 @@ ds, ds_info = tfds.load(
     'roles': ['caretaker', 'infant'],
     'schemes': ['IEng'],
     'annotator': 'gold',
-    'data_streams': ['video'],
-    'frame_step': 5,
-    'left_context': 1,
-    'right_context': 1,
+    'data_streams': ['video.openpose[0,1,0]'],
+    'frame_step': 5 / 25,
+    'left_context': 0,
+    'right_context': 0,
     'start': 0,
-    'end': 200
+    #'end': 200,
+    # TODO: implement flatten samples and supervised keys
+    'flatten_samples': False, # flag to determine wether multiples roles should be appeneded in sequence or added to one sample
+    'supervised_keys': ['x', 'y'] # flag to determine wether multiples roles should be appeneded in sequence or added to one sample
   }
 )
 
