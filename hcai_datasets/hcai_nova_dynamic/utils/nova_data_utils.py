@@ -8,10 +8,12 @@ from hcai_datasets.hcai_nova_dynamic.utils.ssi_stream_utils import Stream
 def frame_to_time(sr: int, frame: int):
   return frame / sr
 
+
 def time_to_frame(sr: int, time_s: float):
 
   # Last frame will not be included if the product is not an int!
   return int(time_s * sr)
+
 
 def chunk_vid(vcap: cv2.VideoCapture, start_frame: int, end_frame: int):
   vcap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -33,8 +35,10 @@ def chunk_vid(vcap: cv2.VideoCapture, start_frame: int, end_frame: int):
 
   return chunk
 
+
 def chunk_stream(stream: Stream, start_frame: int, end_frame: int):
   return stream.data[start_frame:end_frame]
+
 
 def open_file_reader(path, feature_type):
   if feature_type == ndt.DataTypes.video:
@@ -44,6 +48,16 @@ def open_file_reader(path, feature_type):
   elif feature_type == ndt.DataTypes.feature:
     return Stream(path)
 
+
 def close_file_reader(reader, feature_type):
   if feature_type == ndt.DataTypes.video:
     return reader.release()
+
+
+def _get_video_resolution(self, path):
+    vcap = cv2.VideoCapture(path)
+    # get vcap property
+    width = int(vcap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(vcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    vcap.release()
+    return (height, width)
