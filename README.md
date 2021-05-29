@@ -46,3 +46,48 @@ img, label = next(ds.as_numpy_iterator())
 plt.imshow(img / 255.)
 plt.show()
 ```
+
+### Example Usage Nova Dynamic Data
+```python
+import os
+import hcai_datasets
+import tensorflow_datasets as tfds
+
+## Load Data
+ds, ds_info = tfds.load(
+  'hcai_nova_dynamic',
+  split='dynamic_split',
+  with_info=True,
+  as_supervised=True,
+  builder_kwargs={
+    # Database Config
+    'db_config_path': 'db.cfg',
+    'db_config_dict': None,
+
+    # Dataset Config
+    'dataset': '<dataset_name>',
+    'nova_data_dir': os.path.join('C:', 'Nova', 'Data'),
+    'sessions': ['<session_name>'],
+    'roles': ['<role_one>', '<role_two>'],
+    'schemes': ['<label_scheme_one'],
+    'annotator': '<annotator_id>',
+    'data_streams': ['<stream_name>'],
+
+    # Sample Config
+    'frame_step': 1,
+    'left_context': 0,
+    'right_context': 0,
+    'start': None,
+    'end': None,
+    #'flatten_samples': False, 
+    'supervised_keys': ['<role_one>.<stream_name>', '<scheme_two>'],
+
+    # Additional Config
+    'clear_cache' : True
+  }
+)
+
+data_it = ds.as_numpy_iterator()
+ex_data = next(data_it)
+print(ex_data)
+```
