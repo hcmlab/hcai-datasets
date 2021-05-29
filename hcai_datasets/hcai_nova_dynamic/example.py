@@ -33,7 +33,7 @@ ds, ds_info = tfds.load(
     'supervised_keys': ['infant.video.openpose[0,1,0]', 'infant.IEng'], # flag to determine wether multiples roles should be appeneded in sequence or added to one sample
 
     # Additional Config
-    'clear_cache' : True
+    'clear_cache' : False
   }
 )
 

@@ -176,12 +176,28 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
             return -1
 
         else:
-            annos_for_sample = list(filter(lambda x: x['from'] >= start and x['to'] <= end, annotation))
+
+            # finding all annos that overlap with the frame
+            def is_overlapping(af, at, ff, ft):
+
+                # anno is larger than frame
+                altf = af <= ff and at >= ft
+
+                # anno overlaps frame start
+                aofs = at >= ff and at <= ft
+
+                # anno overlaps frame end
+                aofe = af >= ff and af <= ft
+
+                return altf or aofs or aofe
+
+
+            annos_for_sample = list(filter(lambda x: is_overlapping(x['from'], x['to'], start, end), annotation))
 
             if not annos_for_sample:
                 return -1
 
-            majority_sample_idx = np.argmax(list(map(lambda x: x['to'] - x['from'], annos_for_sample)))
+            majority_sample_idx = np.argmax(list(map(lambda x: min(end, x['to']) - max(start, x['from']), annos_for_sample)))
 
             return annos_for_sample[majority_sample_idx]['id']
 
