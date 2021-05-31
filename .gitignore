@@ -3,3 +3,5 @@
 /hcai_datasets.egg-info/
 /hcai_datasets/hcai_nova_dynamic/db.cfg
 /venv/
+/local_data/
+.DS_Store
