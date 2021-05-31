@@ -4,4 +4,5 @@
 /hcai_datasets/hcai_nova_dynamic/db.cfg
 /venv/
 /local_data/
+.idea/
 .DS_Store
