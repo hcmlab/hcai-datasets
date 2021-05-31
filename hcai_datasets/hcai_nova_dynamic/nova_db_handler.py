@@ -1,4 +1,5 @@
 import configparser
+import os
 from pymongo import MongoClient
 
 ANNOTATOR_COLLECTION = 'Annotators'
@@ -15,11 +16,14 @@ class NovaDBHandler():
 
     # Connecting to the database
     if db_config_path:
-      cfg = self.read_config(db_config_path)
-      self.ip = str(cfg['DB']['ip'])
-      self.port = int(cfg['DB']['port'])
-      self.user = str(cfg['DB']['user'])
-      self.password = str(cfg['DB']['password'])
+      if os.path.isfile(db_config_path):
+        cfg = self.read_config(db_config_path)
+        self.ip = str(cfg['DB']['ip'])
+        self.port = int(cfg['DB']['port'])
+        self.user = str(cfg['DB']['user'])
+        self.password = str(cfg['DB']['password'])
+      else:
+        raise FileNotFoundError('No database config file found at {}'.format(db_config_path))
 
     # If a db config_dict is specified overwrite the config from path
     if db_config_dict:
