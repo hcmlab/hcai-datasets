@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import tensorflow_datasets as tfds
+import tensorflow as tf
 
 import hcai_datasets.hcai_nova_dynamic.utils.nova_data_types as ndt
 from hcai_datasets.hcai_nova_dynamic.nova_db_handler import NovaDBHandler
@@ -36,17 +37,18 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
     def __init__(self, *, db_config_path=None, db_config_dict=None, dataset=None, nova_data_dir=None, sessions=None,
                  annotator=None,
                  schemes=None, roles=None, data_streams=None, start=None, end=None, left_context=0, right_context=0,
-                 frame_step=1, flatten_samples=False, supervised_keys=None, clear_cache=True, **kwargs):
+                 frame_size=1, flatten_samples=False, supervised_keys=None, clear_cache=True,
+                 **kwargs):
         """
         Initialize the HcaiNovaDynamic dataset builder
         Args:
-          nova_data_dir:
-          left_context:
-          right_context:
-          frame_step:
-          flatten_samples:
-          supervised_keys:
-          clear_cache:  When set to True the cache will be cleared else the cached dataset will be used. make sure that dataset and sample config did not change. defaults to true.
+          nova_data_dir: the directory to look for data. same as the directory specified in the nova gui.
+          frame_size: the framesize to look at. the matching annotation will be calculated as majority vote from all annotations that are overlapping with the timeframe.
+          left_context: additional data to pass to the classifier on the left side of the frame.
+          right_context: additional data to pass to the classifier on the left side of the frame.
+          flatten_samples: if set to True samples with the same annotation scheme but from different roles will be treated as two different samples.
+          supervised_keys: if specified the dataset can be used with "as_supervised" set to True. this will yield samples that only consist of data that matches the supervised keys.
+          clear_cache:  when set to True the cache will be cleared else the cached dataset will be used. make sure that dataset and sample config did not change. defaults to true.
           db_config_path: path to a configfile whith the nova database config.
           db_config_dict: dictionary with the nova database config. can be used instead of db_config_path. if both are specified db_config_dict is used.
           dataset: the name of the dataset. must match the dataset name in the nova database.
@@ -66,7 +68,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         self.annotator = annotator
         self.left_context = left_context
         self.right_context = right_context
-        self.frame_step = frame_step
+        self.frame_size = frame_size
         self.start = start if start else 0
         self.end = end if end else sys.float_info.max
         self.flatten_samples = flatten_samples
@@ -103,12 +105,12 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
             description=_DESCRIPTION,
             features=tfds.features.FeaturesDict(
                 {**self._info_label, **{k: v['feature'] for k, v in self._info_data.items()}}),
-            # If there's a common (input, target) tuple from the
-            # features, specify them here. They'll be used if
-            # `as_supervised=True` in `builder.as_dataset`.
-            supervised_keys=tuple(self.supervised_keys),  # Set to `None` to disable
+            supervised_keys=tuple(self.supervised_keys),
             homepage='https://github.com/hcmlab/nova',
-            citation=_CITATION
+            citation=_CITATION,
+            # TODO: This option is currently disabled because it raises an error with tfds 4.3.0
+            # Code should be updated once a newer version is released
+            #disable_shuffling=True
         )
 
     def _get_label_info_from_mongo_doc(self, mongo_schemes):
@@ -122,6 +124,10 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         """
 
         label_info = {}
+
+        # Passing the framenumber as label for later sorting
+        label_info['frame'] = tf.int16
+
         # List of all combinations from roles and schemes that occur in the retreived data. Form is 'role.scheme'
         # roles_with_scheme = set([rs for session in self.annos.values() for rs in list(session.keys())])
         for scheme in mongo_schemes:
@@ -132,6 +138,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                         names=[x['name'] for x in sorted(scheme['labels'], key=lambda k: k['id'])])
                 else:
                     raise ValueError('Invalid label type {}'.format(scheme['type']))
+
 
         return label_info
 
@@ -147,7 +154,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 dtype = ndt.string_to_enum(ndt.DataTypes, data['type'])
 
                 if dtype == ndt.DataTypes.video:
-                    res = nova_data_utils._get_video_resolution(sample_stream_path)
+                    res = nova_data_utils.get_video_resolution(sample_stream_path)
                     # shape is (None, H, W, C) - We assume that we always have three channels
                     data_shape = (None,) + res + (3,)
                     feature_connector = tfds.features.Video(data_shape)
@@ -216,8 +223,9 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
         # loading annotations for the session
         for l in self._info_label.keys():
-            r, s = l.split('.')
-            annotation[l] = self.nova_db_handler.get_annos(self.dataset, s, session, self.annotator, r)
+            if not l == 'frame':
+                r, s = l.split('.')
+                annotation[l] = self.nova_db_handler.get_annos(self.dataset, s, session, self.annotator, r)
 
         return annotation
 
@@ -237,42 +245,49 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
     def _generate_examples(self):
         """Yields examples."""
+
+        sample_counter = 1
+
         # Fetching all annotations that are available for the respective schemes and roles
         for session in self.sessions:
 
-            # Gather all data we need for this session
-            annotation = self._get_annotation_for_session(session)
-            data = self._get_data_reader_for_session(session)
-            session_info = self.nova_db_handler.get_session_info(self.dataset, session)[0]
-            dur = session_info['duration']
+                # Gather all data we need for this session
+                annotation = self._get_annotation_for_session(session)
+                data = self._get_data_reader_for_session(session)
+                session_info = self.nova_db_handler.get_session_info(self.dataset, session)[0]
+                dur = session_info['duration']
 
-            if not dur:
-                raise ValueError('Session {} has no duration.'.format(session))
+                if not dur:
+                    raise ValueError('Session {} has no duration.'.format(session))
 
-            # starting position of the first frame in seconds
-            c_pos = self.left_context + self.start
+                # starting position of the first frame in seconds
+                c_pos = self.left_context + self.start
 
-            # generate samples for this session
-            while c_pos + self.frame_step + self.right_context < min(self.end, dur):
-                sample_start = c_pos - self.left_context
-                sample_end = c_pos + self.frame_step + self.right_context
-                key = str(sample_start) + '_' + str(sample_end)
+                # generate samples for this session
+                while c_pos + self.frame_size + self.right_context < min(self.end, dur):
 
-                labels_for_frame = [{k: self._get_label_for_frame(v, sample_start, sample_end)} for k, v in
-                                     annotation.items()]
-                data_for_frame = [{k: self._get_data_for_frame(v, self._info_data[k]['type'], self._info_data[k]['sr'],
-                                                                sample_start, sample_end)} for k, v in data.items()]
+                    # samples are rounded to 5 digits after the decimal to avoid float imprecisions in later calculations
+                    sample_start = round(c_pos - self.left_context, 5)
+                    sample_end = round(c_pos + self.frame_size + self.right_context, 5)
+                    key = str(sample_start) + '_' + str(sample_end)
 
-                sample_dict = {}
-                for l in labels_for_frame:
-                    sample_dict.update(l)
+                    labels_for_frame = [{k: self._get_label_for_frame(v, sample_start, sample_end)} for k, v in
+                                         annotation.items()]
+                    data_for_frame = [{k: self._get_data_for_frame(v, self._info_data[k]['type'], self._info_data[k]['sr'],
+                                                                    sample_start, sample_end)} for k, v in data.items()]
 
-                for d in data_for_frame:
-                    sample_dict.update(d)
+                    sample_dict = {}
+                    sample_dict['frame'] = sample_counter
+                    for l in labels_for_frame:
+                        sample_dict.update(l)
 
-                yield key, sample_dict
-                c_pos += self.frame_step
+                    for d in data_for_frame:
+                        sample_dict.update(d)
 
-            # closing file readers for this session
-            for d, fr in data.items():
-                nova_data_utils.close_file_reader(fr, self._info_data[d]['feature'])
+                    yield key, sample_dict
+                    c_pos += self.frame_size
+                    sample_counter += 1
+
+                # closing file readers for this session
+                for d, fr in data.items():
+                    nova_data_utils.close_file_reader(fr, self._info_data[d]['feature'])
