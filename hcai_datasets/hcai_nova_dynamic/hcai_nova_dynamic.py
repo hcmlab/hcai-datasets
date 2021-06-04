@@ -9,7 +9,7 @@ import tensorflow as tf
 
 import hcai_datasets.hcai_nova_dynamic.utils.nova_data_types as ndt
 from hcai_datasets.hcai_nova_dynamic.nova_db_handler import NovaDBHandler
-from hcai_datasets.hcai_nova_dynamic.utils import nova_data_utils
+from hcai_datasets.hcai_nova_dynamic.utils import nova_data_utils as ndu
 
 # TODO(hcai_audioset): Markdown description  that will appear on the catalog page.
 _DESCRIPTION = """
@@ -36,8 +36,9 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
     def __init__(self, *, db_config_path=None, db_config_dict=None, dataset=None, nova_data_dir=None, sessions=None,
                  annotator=None,
-                 schemes=None, roles=None, data_streams=None, start=None, end=None, left_context=0, right_context=0,
-                 frame_size=1, flatten_samples=False, supervised_keys=None, clear_cache=True,
+                 schemes=None, roles=None, data_streams=None, start=None, end=None, left_context='0', right_context='0',
+                 frame_size='1', stride=None,
+                 flatten_samples=False, supervised_keys=None, clear_cache=True,
                  **kwargs):
         """
         Initialize the HcaiNovaDynamic dataset builder
@@ -46,6 +47,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
           frame_size: the framesize to look at. the matching annotation will be calculated as majority vote from all annotations that are overlapping with the timeframe.
           left_context: additional data to pass to the classifier on the left side of the frame.
           right_context: additional data to pass to the classifier on the left side of the frame.
+          stride: how much a frame is moved to calculate the next sample. equals framesize by default.
           flatten_samples: if set to True samples with the same annotation scheme but from different roles will be treated as two different samples.
           supervised_keys: if specified the dataset can be used with "as_supervised" set to True. this will yield samples that only consist of data that matches the supervised keys.
           clear_cache:  when set to True the cache will be cleared else the cached dataset will be used. make sure that dataset and sample config did not change. defaults to true.
@@ -66,11 +68,12 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         self.sessions = sessions
         self.roles = roles
         self.annotator = annotator
-        self.left_context = left_context
-        self.right_context = right_context
-        self.frame_size = frame_size
-        self.start = start if start else 0
-        self.end = end if end else sys.float_info.max
+        self.left_context_ms = ndu.parse_time_string_to_ms(left_context)
+        self.right_context_ms = ndu.parse_time_string_to_ms(right_context)
+        self.frame_size_ms = ndu.parse_time_string_to_ms(frame_size)
+        self.stride_ms = ndu.parse_time_string_to_ms(stride) if stride else self.frame_size_ms
+        self.start_ms = ndu.parse_time_string_to_ms(start) if start else 0
+        self.end_ms = ndu.parse_time_string_to_ms(end) if end else float('inf')
         self.flatten_samples = flatten_samples
         self.clear_cache = clear_cache
 
@@ -110,7 +113,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
             citation=_CITATION,
             # TODO: This option is currently disabled because it raises an error with tfds 4.3.0
             # Code should be updated once a newer version is released
-            #disable_shuffling=True
+            disable_shuffling=True
         )
 
     def _get_label_info_from_mongo_doc(self, mongo_schemes):
@@ -139,7 +142,6 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 else:
                     raise ValueError('Invalid label type {}'.format(scheme['type']))
 
-
         return label_info
 
     def _get_data_info_from_mongo_doc(self, mongo_data_streams):
@@ -154,14 +156,14 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 dtype = ndt.string_to_enum(ndt.DataTypes, data['type'])
 
                 if dtype == ndt.DataTypes.video:
-                    res = nova_data_utils.get_video_resolution(sample_stream_path)
+                    res = ndu.get_video_resolution(sample_stream_path)
                     # shape is (None, H, W, C) - We assume that we always have three channels
                     data_shape = (None,) + res + (3,)
                     feature_connector = tfds.features.Video(data_shape)
                 elif dtype == ndt.DataTypes.audio:
                     raise NotImplementedError('Audio files are not yet supported')
                 elif dtype == ndt.DataTypes.feature:
-                    stream = nova_data_utils.Stream().load_header(sample_stream_path)
+                    stream = ndu.Stream().load_header(sample_stream_path)
                     data_shape = (stream.dim,)
                     data_type = stream.tftype
                     feature_connector = tfds.features.Sequence(tfds.features.Tensor(shape=data_shape, dtype=data_type))
@@ -198,27 +200,27 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
                 return altf or aofs or aofe
 
-
             annos_for_sample = list(filter(lambda x: is_overlapping(x['from'], x['to'], start, end), annotation))
 
             if not annos_for_sample:
                 return -1
 
-            majority_sample_idx = np.argmax(list(map(lambda x: min(end, x['to']) - max(start, x['from']), annos_for_sample)))
+            majority_sample_idx = np.argmax(
+                list(map(lambda x: min(end, x['to']) - max(start, x['from']), annos_for_sample)))
 
             return annos_for_sample[majority_sample_idx]['id']
 
     def _get_data_for_frame(self, file_reader, feature_type, sr, start, end):
-        start_frame = nova_data_utils.time_to_frame(sr, start)
-        end_frame = nova_data_utils.time_to_frame(sr, end)
+        start_frame = ndu.seconds_to_frame(sr, start)
+        end_frame = ndu.seconds_to_frame(sr, end)
         if feature_type == ndt.DataTypes.video:
-            return nova_data_utils.chunk_vid(file_reader, start_frame, end_frame)
+            return ndu.chunk_vid(file_reader, start_frame, end_frame)
         elif feature_type == ndt.DataTypes.audio:
             raise NotImplementedError('data chunking for audio is not yet implemented')
         elif feature_type == ndt.DataTypes.feature:
-            return nova_data_utils.chunk_stream(file_reader, start_frame, end_frame)
+            return ndu.chunk_stream(file_reader, start_frame, end_frame)
 
-    def _get_annotation_for_session(self, session):
+    def _get_annotation_for_session(self, session, time_in_ms=False):
         annotation = {}
 
         # loading annotations for the session
@@ -227,6 +229,11 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 r, s = l.split('.')
                 annotation[l] = self.nova_db_handler.get_annos(self.dataset, s, session, self.annotator, r)
 
+                if time_in_ms:
+                    for d in annotation[l]:
+                        d['from'] = int(d['from'] * 1000)
+                        d['to'] = int(d['to'] * 1000)
+
         return annotation
 
     def _get_data_reader_for_session(self, session):
@@ -234,60 +241,62 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
         # openening data reader for this session
         for d, feature_info in self._info_data.items():
-          data_path = os.path.join(self.nova_data_dir, self.dataset, session, feature_info['file'])
+            data_path = os.path.join(self.nova_data_dir, self.dataset, session, feature_info['file'])
 
-          if not os.path.isfile(data_path):
-            raise FileNotFoundError('No datastream found at {}'.format(data_path))
-          file_reader = nova_data_utils.open_file_reader(data_path, feature_info['type'])
-          data[d] = file_reader
+            if not os.path.isfile(data_path):
+                raise FileNotFoundError('No datastream found at {}'.format(data_path))
+            file_reader = ndu.open_file_reader(data_path, feature_info['type'])
+            data[d] = file_reader
 
         return data
 
     def _generate_examples(self):
         """Yields examples."""
 
+        # Needed to sort the samples later and assure that the order is the same as in nova. Necessary for CML till the tfds can be returned in order.
         sample_counter = 1
 
         # Fetching all annotations that are available for the respective schemes and roles
         for session in self.sessions:
 
-                # Gather all data we need for this session
-                annotation = self._get_annotation_for_session(session)
-                data = self._get_data_reader_for_session(session)
-                session_info = self.nova_db_handler.get_session_info(self.dataset, session)[0]
-                dur = session_info['duration']
+            # Gather all data we need for this session
+            annotation = self._get_annotation_for_session(session, time_in_ms=True)
 
-                if not dur:
-                    raise ValueError('Session {} has no duration.'.format(session))
+            # Converting anno times from s to ms
 
-                # starting position of the first frame in seconds
-                c_pos = self.left_context + self.start
+            data = self._get_data_reader_for_session(session)
+            session_info = self.nova_db_handler.get_session_info(self.dataset, session)[0]
+            dur_ms = session_info['duration'] * 1000
 
-                # generate samples for this session
-                while c_pos + self.frame_size + self.right_context < min(self.end, dur):
+            if not dur_ms:
+                raise ValueError('Session {} has no duration.'.format(session))
 
-                    # samples are rounded to 5 digits after the decimal to avoid float imprecisions in later calculations
-                    sample_start = round(c_pos - self.left_context, 5)
-                    sample_end = round(c_pos + self.frame_size + self.right_context, 5)
-                    key = str(sample_start) + '_' + str(sample_end)
+            # Starting position of the first frame in seconds
+            c_pos_ms = self.left_context_ms + self.start_ms
 
-                    labels_for_frame = [{k: self._get_label_for_frame(v, sample_start, sample_end)} for k, v in
-                                         annotation.items()]
-                    data_for_frame = [{k: self._get_data_for_frame(v, self._info_data[k]['type'], self._info_data[k]['sr'],
-                                                                    sample_start, sample_end)} for k, v in data.items()]
+            # Generate samples for this session
+            while c_pos_ms + self.stride_ms + self.right_context_ms < min(self.end_ms, dur_ms):
+                sample_start_ms = c_pos_ms - self.left_context_ms
+                sample_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
+                key = str(sample_start_ms / 1000) + '_' + str(sample_end_ms / 1000)
 
-                    sample_dict = {}
-                    sample_dict['frame'] = sample_counter
-                    for l in labels_for_frame:
-                        sample_dict.update(l)
+                labels_for_frame = [{k: self._get_label_for_frame(v, sample_start_ms, sample_end_ms)} for k, v in
+                                    annotation.items()]
+                data_for_frame = [{k: self._get_data_for_frame(v, self._info_data[k]['type'], self._info_data[k]['sr'],
+                                                               sample_start_ms, sample_end_ms)} for k, v in data.items()]
 
-                    for d in data_for_frame:
-                        sample_dict.update(d)
+                sample_dict = {}
+                sample_dict['frame'] = sample_counter
+                for l in labels_for_frame:
+                    sample_dict.update(l)
 
-                    yield key, sample_dict
-                    c_pos += self.frame_size
-                    sample_counter += 1
+                for d in data_for_frame:
+                    sample_dict.update(d)
 
-                # closing file readers for this session
-                for d, fr in data.items():
-                    nova_data_utils.close_file_reader(fr, self._info_data[d]['feature'])
+                yield key, sample_dict
+                c_pos_ms += self.frame_size_ms
+                sample_counter += 1
+
+            # closing file readers for this session
+            for d, fr in data.items():
+                ndu.close_file_reader(fr, self._info_data[d]['feature'])

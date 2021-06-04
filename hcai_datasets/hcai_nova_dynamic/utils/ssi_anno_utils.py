@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as ET
-from hcai_datasets.hcai_nova_dynamic.utils.ssi_data_types import DataTypes, FileTypes, string_to_enum
+from hcai_datasets.hcai_nova_dynamic.utils.ssi_data_types import FileTypes, string_to_enum
 from enum import Enum
 import numpy as np
 import csv
@@ -29,6 +29,7 @@ class Anno:
         self.role = ""
         self.annotator = ""
         self.data = None
+        self.scheme = Scheme()
 
     def load_header(self, path):
         tree = ET.parse(path)
