@@ -294,7 +294,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                     sample_dict.update(d)
 
                 yield key, sample_dict
-                c_pos_ms += self.frame_size_ms
+                c_pos_ms += self.stride_ms
                 sample_counter += 1
 
             # closing file readers for this session
