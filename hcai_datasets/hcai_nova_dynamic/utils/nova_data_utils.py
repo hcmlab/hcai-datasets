@@ -12,6 +12,9 @@ def frame_to_seconds(sr: int, frame: int) -> float:
 def seconds_to_frame(sr: int, time_s: float) -> int:
     return round(time_s * sr)
 
+def milli_seconds_to_frame(sr: int, time_ms: int) -> int:
+    return seconds_to_frame(sr=sr, time_s= time_ms / 1000)
+
 
 def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
     # if frame is specified milliseconds as string
@@ -41,7 +44,6 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
             return int(frame)
         except ValueError:
             raise ValueError('Invalid input format for frame: {}'.format(frame))
-
 
 
 def chunk_vid(vcap: cv2.VideoCapture, start_frame: int, end_frame: int):
