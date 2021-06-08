@@ -78,7 +78,6 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         self.end_ms = ndu.parse_time_string_to_ms(end) if end else float('inf')
         self.flatten_samples = flatten_samples
         self.clear_cache = clear_cache
-        self.supervised_keys = supervised_keys
 
         self.nova_db_handler = NovaDBHandler(db_config_path, db_config_dict)
 
@@ -89,25 +88,26 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         self._info_label = self._get_label_info_from_mongo_doc(mongo_schemes)
         self._info_data = self._get_data_info_from_mongo_doc(mongo_streams)
 
-        # TODO: At the moment flatten_samples only works when supervised keys are provided. this is probably not necessary
-        if self.flatten_samples and not self.supervised_keys:
-            raise Warning('\'flatten_samples\' has been set but \'supervised_keys\' are not specified.')
-        if self.flatten_samples and self.supervised_keys[0] not in self.data_streams:
-            # remove <role> of supervised keys
-            _, data_stream = self._split_role_key(self.supervised_keys[0])
-            if not data_stream in self.data_streams:
-                print('Warning: Cannot find supervised key \'{}\' in datastreams'.format(data_stream))
-                raise Warning('Unknown data_stream')
-            else:
-                self.supervised_keys[0] = data_stream
-        if self.flatten_samples and self.supervised_keys[-1] not in self.schemes:
-            # remove <role> of supervised keys
-            _, scheme = self._split_role_key(self.supervised_keys[1])
-            if not scheme in schemes:
-                print('Warning: Cannot find supervised key \'{}\' in schemes'.format(scheme))
-                raise Warning('Unknown scheme')
-            else:
-                self.supervised_keys[1] = scheme
+        # setting supervised keys
+        if supervised_keys and self.flatten_samples:
+            if supervised_keys[0] not in self.data_streams:
+                # remove <role> of supervised keys
+                _, data_stream = self._split_role_key(supervised_keys[0])
+                if not data_stream in self.data_streams:
+                    print('Warning: Cannot find supervised key \'{}\' in datastreams'.format(data_stream))
+                    raise Warning('Unknown data_stream')
+                else:
+                    supervised_keys[0] = data_stream
+            if supervised_keys[-1] not in self.schemes:
+                # remove <role> of supervised keys
+                _, scheme = self._split_role_key(supervised_keys[1])
+                if not scheme in schemes:
+                    print('Warning: Cannot find supervised key \'{}\' in schemes'.format(scheme))
+                    raise Warning('Unknown scheme')
+                else:
+                    supervised_keys[1] = scheme
+
+        self.supervised_keys = tuple(supervised_keys) if supervised_keys else None
 
         super(HcaiNovaDynamic, self).__init__(**kwargs)
 
@@ -134,7 +134,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
             builder=self,
             description=_DESCRIPTION,
             features=tfds.features.FeaturesDict(features_dict),
-            supervised_keys=tuple(self.supervised_keys),
+            supervised_keys= self.supervised_keys,
             homepage='https://github.com/hcmlab/nova',
             citation=_CITATION,
             # TODO: This option is currently disabled because it raises an error with tfds 4.3.0
@@ -330,20 +330,18 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                         sample_dict.update(d)
 
                     if self.flatten_samples:
-                        if not self.supervised_keys:
-                            raise RuntimeError('Trying to \'flatten_sample\' but \'supervised_keys\' has not been set.')
 
                         # grouping labels and data according to roles
                         for role in self.roles:
-                            data_key = self._merge_role_key(role=role, key=self.supervised_keys[0])
-                            label_key = self._merge_role_key(role=role, key=self.supervised_keys[1])
 
-                            yield key + '_' + role, {
-                                #'frame': sample_counter,
-                                'frame': str(sample_counter) + '_' + key + '_' + role,
-                                self.supervised_keys[0]: sample_dict[data_key],
-                                self.supervised_keys[1]: sample_dict[label_key]
-                            }
+                            # filter dictionary to contain values for role
+                            sample_dict_for_role = dict(filter(lambda elem: role in elem[0], sample_dict.items()))
+
+                            # remove role from dictionary keys
+                            sample_dict_for_role = dict(map(lambda elem: (elem[0].replace(role + '.', ''), elem[1]), sample_dict_for_role.items()))
+
+                            sample_dict_for_role['frame'] = str(sample_counter) + '_' + key + '_' + role
+                            yield key + '_' + role, sample_dict_for_role
                             sample_counter += 1
                         c_pos_ms += self.stride_ms
 
