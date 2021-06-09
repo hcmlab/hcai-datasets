@@ -332,7 +332,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 while c_pos_ms + self.stride_ms + self.right_context_ms <= min(self.end_ms, dur_ms):
                     sample_start_ms = c_pos_ms - self.left_context_ms
                     sample_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
-                    key = str(sample_start_ms / 1000) + '_' + str(sample_end_ms / 1000)
+                    key = session + '_' + str(sample_start_ms / 1000) + '_' + str(sample_end_ms / 1000)
 
                     labels_for_frame = [{k: self._get_label_for_frame(v, sample_start_ms, sample_end_ms, k)} for k, v in
                                        annotation.items()]
