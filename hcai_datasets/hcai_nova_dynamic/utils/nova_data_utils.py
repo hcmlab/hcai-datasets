@@ -73,11 +73,16 @@ def chunk_stream(stream: Stream, start_frame: int, end_frame: int):
 
 def open_file_reader(path, feature_type):
     if feature_type == ndt.DataTypes.video:
-        return cv2.VideoCapture(path)
+        fr = cv2.VideoCapture(path)
+        fps = fr.get(cv2.CAP_PROP_FPS)      # OpenCV2 version 2 used "CV_CAP_PROP_FPS"
+        frame_count = int(fr.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count/fps
+        return cv2.VideoCapture(path), duration
     elif feature_type == ndt.DataTypes.audio:
         return NotImplementedError('Filereader for audio features is not yet implemented')
     elif feature_type == ndt.DataTypes.feature:
-        return Stream(path)
+        stream = Stream(path)
+        return stream, stream.data.shape[0] / stream.sr
 
 
 def close_file_reader(reader, feature_type):

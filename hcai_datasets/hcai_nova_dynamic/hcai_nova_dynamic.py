@@ -244,7 +244,9 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
             # no label matches
             if not annos_for_sample:
                 if self.add_rest_class:
-                    scheme = self._split_role_key(scheme)[-1]
+                    if self.flatten_samples:
+                        scheme = self._split_role_key(scheme)[-1]
+
                     # Last label is always the rest class
                     return self.info.features[scheme].num_classes - 1
                 else:
@@ -283,6 +285,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
     def _get_data_reader_for_session(self, session):
         data = {}
+        durations = {}
 
         # openening data reader for this session
         for d, feature_info in self._info_data.items():
@@ -290,10 +293,14 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
             if not os.path.isfile(data_path):
                 raise FileNotFoundError('No datastream found at {}'.format(data_path))
-            file_reader = ndu.open_file_reader(data_path, feature_info['type'])
+            file_reader, dur = ndu.open_file_reader(data_path, feature_info['type'])
+            durations[d] = dur
             data[d] = file_reader
 
-        return data
+        return data, durations
+
+    def _get_data_reader_len(self, data_reader):
+        return
 
     def _generate_examples(self):
             """Yields examples."""
@@ -309,12 +316,14 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
                 # Converting anno times from s to ms
 
-                data = self._get_data_reader_for_session(session)
+                data, durations = self._get_data_reader_for_session(session)
                 session_info = self.nova_db_handler.get_session_info(self.dataset, session)[0]
-                dur_ms = session_info['duration'] * 1000
+                dur = min( *list(durations.values()), session_info['duration'] )
 
-                if not dur_ms:
+                if not dur:
                     raise ValueError('Session {} has no duration.'.format(session))
+
+                dur_ms = dur * 1000
 
                 # Starting position of the first frame in seconds
                 c_pos_ms = self.left_context_ms + self.start_ms
@@ -326,9 +335,9 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                     key = str(sample_start_ms / 1000) + '_' + str(sample_end_ms / 1000)
 
                     labels_for_frame = [{k: self._get_label_for_frame(v, sample_start_ms, sample_end_ms, k)} for k, v in
-                                        annotation.items()]
+                                       annotation.items()]
                     data_for_frame = [{k: self._get_data_for_frame(v, self._info_data[k]['type'], self._info_data[k]['sr'],
-                                                                   sample_start_ms, sample_end_ms)} for k, v in data.items()]
+                                                                  sample_start_ms, sample_end_ms)} for k, v in data.items()]
 
                     sample_dict = {}
 
