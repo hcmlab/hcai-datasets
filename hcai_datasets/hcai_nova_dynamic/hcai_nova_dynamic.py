@@ -38,7 +38,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                  annotator=None,
                  schemes=None, roles=None, data_streams=None, start=None, end=None, left_context='0', right_context='0',
                  frame_size='1', stride=None,
-                 flatten_samples=False, supervised_keys=None, clear_cache=True,
+                 flatten_samples=False, supervised_keys=None, clear_cache=True, add_rest_class = True,
                  **kwargs):
         """
         Initialize the HcaiNovaDynamic dataset builder
@@ -51,6 +51,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
           flatten_samples: if set to True samples with the same annotation scheme but from different roles will be treated as separate samples. only <scheme> is used for the keys.
           supervised_keys: if specified the dataset can be used with "as_supervised" set to True. Should be in the format <role>.<scheme>. if flatten_samples is true <role> will be ignored.
           clear_cache:  when set to True the cache will be cleared else the cached dataset will be used. make sure that dataset and sample config did not change. defaults to true.
+          add_rest_class: when set to True an additional restclass will be added to the end the label list
           db_config_path: path to a configfile whith the nova database config.
           db_config_dict: dictionary with the nova database config. can be used instead of db_config_path. if both are specified db_config_dict is used.
           dataset: the name of the dataset. must match the dataset name in the nova database.
@@ -78,6 +79,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         self.end_ms = ndu.parse_time_string_to_ms(end) if end else float('inf')
         self.flatten_samples = flatten_samples
         self.clear_cache = clear_cache
+        self.add_rest_class = add_rest_class
 
         self.nova_db_handler = NovaDBHandler(db_config_path, db_config_dict)
 
@@ -173,8 +175,10 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 label_id = self._merge_role_key(role=role, key=scheme['name'])
 
                 if scheme['type'] == 'DISCRETE':
-                    label_info[label_id] = tfds.features.ClassLabel(
-                        names=[x['name'] for x in sorted(scheme['labels'], key=lambda k: k['id'])])
+                    label_names = [x['name'] for x in sorted(scheme['labels'], key=lambda k: k['id'])]
+                    if self.add_rest_class:
+                        label_names.append('REST')
+                    label_info[label_id] = tfds.features.ClassLabel(names=label_names)
                 else:
                     raise ValueError('Invalid label type {}'.format(scheme['type']))
 
@@ -214,13 +218,13 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         """Returns SplitGenerators."""
         return {'dynamic_split': self._generate_examples()}
 
-    def _get_label_for_frame(self, annotation, start, end):
+    def _get_label_for_frame(self, annotation, start, end, scheme):
 
+        # Garbage Label
         if annotation == -1:
             return -1
 
         else:
-
             # finding all annos that overlap with the frame
             def is_overlapping(af, at, ff, ft):
 
@@ -237,8 +241,14 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
             annos_for_sample = list(filter(lambda x: is_overlapping(x['from'], x['to'], start, end), annotation))
 
+            # no label matches
             if not annos_for_sample:
-                return -1
+                if self.add_rest_class:
+                    scheme = self._split_role_key(scheme)[-1]
+                    # Last label is always the rest class
+                    return self.info.features[scheme].num_classes - 1
+                else:
+                    return -1
 
             majority_sample_idx = np.argmax(
                 list(map(lambda x: min(end, x['to']) - max(start, x['from']), annos_for_sample)))
@@ -285,7 +295,6 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
         return data
 
-
     def _generate_examples(self):
             """Yields examples."""
 
@@ -316,7 +325,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                     sample_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
                     key = str(sample_start_ms / 1000) + '_' + str(sample_end_ms / 1000)
 
-                    labels_for_frame = [{k: self._get_label_for_frame(v, sample_start_ms, sample_end_ms)} for k, v in
+                    labels_for_frame = [{k: self._get_label_for_frame(v, sample_start_ms, sample_end_ms, k)} for k, v in
                                         annotation.items()]
                     data_for_frame = [{k: self._get_data_for_frame(v, self._info_data[k]['type'], self._info_data[k]['sr'],
                                                                    sample_start_ms, sample_end_ms)} for k, v in data.items()]
