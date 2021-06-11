@@ -27,7 +27,7 @@ def load_wav_16k_mono(filename):
         desired_channels=1)
     wav = tf.squeeze(wav, axis=-1)
     sample_rate = tf.cast(sample_rate, dtype=tf.int64)
-    wav = tfio.audio.resample(wav, rate_in=sample_rate, rate_out=16000)
+    wav = tfio.AUDIO.resample(wav, rate_in=sample_rate, rate_out=16000)
     return wav
 
 def pp_tf(speech):

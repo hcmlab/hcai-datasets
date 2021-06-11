@@ -7,9 +7,15 @@ import sys
 import tensorflow_datasets as tfds
 import tensorflow as tf
 
-import hcai_datasets.hcai_nova_dynamic.utils.nova_data_types as ndt
+import hcai_datasets.hcai_nova_dynamic.utils.nova_types as nt
+import hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils as ndu
+import hcai_datasets.hcai_nova_dynamic.utils.nova_anno_utils as nau
+
+from hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils import AudioData, VideoData, StreamData
+from hcai_datasets.hcai_nova_dynamic.utils.nova_anno_utils import DiscreteAnnotation, ContinousAnnotation, FreeAnnotation
+
 from hcai_datasets.hcai_nova_dynamic.nova_db_handler import NovaDBHandler
-from hcai_datasets.hcai_nova_dynamic.utils import nova_data_utils as ndu
+from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import *
 
 # TODO(hcai_audioset): Markdown description  that will appear on the catalog page.
 _DESCRIPTION = """
@@ -80,29 +86,27 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         self.flatten_samples = flatten_samples
         self.clear_cache = clear_cache
         self.add_rest_class = add_rest_class
-
         self.nova_db_handler = NovaDBHandler(db_config_path, db_config_dict)
 
+        # Retrieving meta information from the database
         mongo_schemes = self.nova_db_handler.get_schemes(dataset=dataset, schemes=schemes)
-        mongo_streams = self.nova_db_handler.get_data_streams(dataset=dataset, data_streams=data_streams)
-
-        # infos as needed for the tensorflow dataset init and     # additional info for loading samples
-        self._info_label = self._get_label_info_from_mongo_doc(mongo_schemes)
-        self._info_data = self._get_data_info_from_mongo_doc(mongo_streams)
+        mongo_data = self.nova_db_handler.get_data_streams(dataset=dataset, data_streams=data_streams)
+        self.label_info = self._populate_labels_from_mongo_doc(mongo_schemes)
+        self.data_info = self._populate_data_info_from_mongo_doc(mongo_data)
 
         # setting supervised keys
         if supervised_keys and self.flatten_samples:
             if supervised_keys[0] not in self.data_streams:
                 # remove <role> of supervised keys
-                _, data_stream = self._split_role_key(supervised_keys[0])
+                _, data_stream = split_role_key(supervised_keys[0])
                 if not data_stream in self.data_streams:
                     print('Warning: Cannot find supervised key \'{}\' in datastreams'.format(data_stream))
                     raise Warning('Unknown data_stream')
                 else:
                     supervised_keys[0] = data_stream
-            if supervised_keys[-1] not in self.schemes:
+            if supervised_keys[1] not in self.schemes:
                 # remove <role> of supervised keys
-                _, scheme = self._split_role_key(supervised_keys[1])
+                _, scheme = split_role_key(supervised_keys[1])
                 if not scheme in schemes:
                     print('Warning: Cannot find supervised key \'{}\' in schemes'.format(scheme))
                     raise Warning('Unknown scheme')
@@ -124,12 +128,15 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
         def map_label_id(lid):
             if self.flatten_samples and not lid == 'frame':
-                return self._split_role_key(lid)[-1]
+                return split_role_key(lid)[-1]
             return lid
 
         features_dict = {
-                    **{map_label_id(k): v for k,v in self._info_label.items()},
-                    **{map_label_id(k): v['feature'] for k, v in self._info_data.items()}
+                    # TODO: Remove frame when tfds implements option to disable shuffle
+                    # Adding fake framenumber label for sorting
+                    'frame': tf.string,
+                    **{map_label_id(k): v.get_tf_info()[1] for k,v in self.label_info.items()},
+                    **{map_label_id(k): v.get_tf_info()[1] for k, v in self.data_info.items()}
                 }
 
         return tfds.core.DatasetInfo(
@@ -144,163 +151,96 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
             #disable_shuffling=True
         )
 
-    def _merge_role_key(self, key, role):
-        return role + '.' + key
-
-    def _split_role_key(self, label_key):
-        split = label_key.split('.')
-        role = split[0]
-        key = '.'.join(split[1:])
-        return role, key
-
-    def _get_label_info_from_mongo_doc(self, mongo_schemes):
+    def _populate_labels_from_mongo_doc(self, mongo_schemes):
         """
-
+        Setting self.label_info
         Args:
           mongo_schemes:
 
         Returns:
 
         """
-
         label_info = {}
 
-        # TODO: Remove when tfds implements option to disable shuffle
-        # Adding fake framenumber label for sorting
-        label_info['frame'] = tf.string
-        # List of all combinations from roles and schemes that occur in the retrieved data. Form is 'role.scheme'.
-        # If flatten_sample is True form is 'scheme'. s
+        # List of all combinations from roles and schemes that occur in the retrieved data.
         for scheme in mongo_schemes:
             for role in self.roles:
-                label_id = self._merge_role_key(role=role, key=scheme['name'])
+                label_id = merge_role_key(role=role, key=scheme['name'])
+                scheme_type = nt.string_to_enum(nt.AnnoTypes, scheme['type'])
+                scheme_name = scheme['name']
+                scheme_valid = scheme['isValid']
 
-                if scheme['type'] == 'DISCRETE':
-                    label_names = [x['name'] for x in sorted(scheme['labels'], key=lambda k: k['id'])]
-                    if self.add_rest_class:
-                        label_names.append('REST')
-                    label_info[label_id] = tfds.features.ClassLabel(names=label_names)
+                if scheme_type == nt.AnnoTypes.DISCRETE:
+                    labels = scheme['labels']
+                    label_info[label_id] = nau.DiscreteAnnotation(role=role, add_rest_class=True, scheme=scheme_name, is_valid=scheme_valid, labels=labels)
+
+                elif scheme_type == nt.AnnoTypes.POLYGON:
+                    #label_info[label_id] = tfds.features.Sequence( tfds.features.Tensor(shape=(2,), dtype=np.int32 ) )
+                    #TODO: Set labelinfo that includes samplerate
+                    ...
+
                 else:
                     raise ValueError('Invalid label type {}'.format(scheme['type']))
 
         return label_info
 
-    def _get_data_info_from_mongo_doc(self, mongo_data_streams):
+    def _populate_data_info_from_mongo_doc(self, mongo_data_streams):
+        """
+        Setting self.data
+        Args:
+          mongo_schemes:
+
+        Returns:
+
+        """
         data_info = {}
 
         for data_stream in mongo_data_streams:
             for role in self.roles:
                 sample_stream_name = role + '.' + data_stream['name'] + '.' + data_stream['fileExt']
-                sample_stream_path = os.path.join(self.nova_data_dir, self.dataset, self.sessions[0],
-                                                  sample_stream_name)
-                data_id = self._merge_role_key(role=role, key=data_stream['name'])
-                dtype = ndt.string_to_enum(ndt.DataTypes, data_stream['type'])
+                sample_data_path = os.path.join(self.nova_data_dir, self.dataset, self.sessions[0], sample_stream_name)
+                dtype = nt.string_to_enum(nt.DataTypes, data_stream['type'])
 
-                if dtype == ndt.DataTypes.video:
-                    res = ndu.get_video_resolution(sample_stream_path)
-                    # shape is (None, H, W, C) - We assume that we always have three channels
-                    data_shape = (None,) + res + (3,)
-                    feature_connector = tfds.features.Video(data_shape)
-                elif dtype == ndt.DataTypes.audio:
+                if dtype == nt.DataTypes.VIDEO:
+                    raise NotImplementedError('Video files are not yet supported')
+                elif dtype == nt.DataTypes.AUDIO:
                     raise NotImplementedError('Audio files are not yet supported')
-                elif dtype == ndt.DataTypes.feature:
-                    stream = ndu.Stream().load_header(sample_stream_path)
-                    data_shape = (stream.dim,)
-                    data_type = stream.tftype
-                    feature_connector = tfds.features.Sequence(tfds.features.Tensor(shape=data_shape, dtype=data_type))
+                elif dtype == nt.DataTypes.FEATURE:
+                    data = StreamData(role=role, name=data_stream['name'], sr=data_stream['sr'], is_valid=data_stream['isValid'], sample_data_path=sample_data_path)
                 else:
                     raise ValueError('Invalid data type {}'.format(data_stream['type']))
 
-                data_info[data_id] = {'feature': feature_connector, 'file': sample_stream_name, 'sr': data_stream['sr'],
-                                      'type': dtype}
+                data_id = merge_role_key(role=role, key=data_stream['name'])
+                data_info[data_id] = data
+
+
         return data_info
 
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
         return {'dynamic_split': self._generate_examples()}
 
-    def _get_label_for_frame(self, annotation, start, end, scheme):
 
-        # Garbage Label
-        if annotation == -1:
-            return -1
-
-        else:
-            # finding all annos that overlap with the frame
-            def is_overlapping(af, at, ff, ft):
-
-                # anno is larger than frame
-                altf = af <= ff and at >= ft
-
-                # anno overlaps frame start
-                aofs = at >= ff and at <= ft
-
-                # anno overlaps frame end
-                aofe = af >= ff and af <= ft
-
-                return altf or aofs or aofe
-
-            annos_for_sample = list(filter(lambda x: is_overlapping(x['from'], x['to'], start, end), annotation))
-
-            # no label matches
-            if not annos_for_sample:
-                if self.add_rest_class:
-                    if self.flatten_samples:
-                        scheme = self._split_role_key(scheme)[-1]
-
-                    # Last label is always the rest class
-                    return self.info.features[scheme].num_classes - 1
-                else:
-                    return -1
-
-            majority_sample_idx = np.argmax(
-                list(map(lambda x: min(end, x['to']) - max(start, x['from']), annos_for_sample)))
-
-            return annos_for_sample[majority_sample_idx]['id']
 
     def _get_data_for_frame(self, file_reader, feature_type, sr, start, end):
         start_frame = ndu.milli_seconds_to_frame(sr, start)
         end_frame = ndu.milli_seconds_to_frame(sr, end)
-        if feature_type == ndt.DataTypes.video:
+        if feature_type == nt.DataTypes.VIDEO:
             return ndu.chunk_vid(file_reader, start_frame, end_frame)
-        elif feature_type == ndt.DataTypes.audio:
-            raise NotImplementedError('data chunking for audio is not yet implemented')
-        elif feature_type == ndt.DataTypes.feature:
+        elif feature_type == nt.DataTypes.AUDIO:
+            raise NotImplementedError('Data chunking for audio is not yet implemented')
+        elif feature_type == nt.DataTypes.FEATURE:
             return ndu.chunk_stream(file_reader, start_frame, end_frame)
 
-    def _get_annotation_for_session(self, session, time_in_ms=False):
-        annotation = {}
+    def _load_annotation_for_session(self, session, time_to_ms=False):
+        for label_id, anno in self.label_info.items():
+            mongo_anno = self.nova_db_handler.get_annos(self.dataset, anno.scheme, session, self.annotator, anno.role)
+            anno.set_annotation_from_mongo_doc(mongo_anno, time_to_ms=time_to_ms)
 
-        # loading annotations for the session
-        for r in self.roles:
-            for s in self.schemes:
-                label_key = self._merge_role_key(role=r, key=s)
-                annotation[label_key] = self.nova_db_handler.get_annos(self.dataset, s, session, self.annotator, r)
-
-                if time_in_ms:
-                    for d in annotation[label_key]:
-                        d['from'] = int(d['from'] * 1000)
-                        d['to'] = int(d['to'] * 1000)
-
-        return annotation
-
-    def _get_data_reader_for_session(self, session):
-        data = {}
-        durations = {}
-
-        # openening data reader for this session
-        for d, feature_info in self._info_data.items():
-            data_path = os.path.join(self.nova_data_dir, self.dataset, session, feature_info['file'])
-
-            if not os.path.isfile(data_path):
-                raise FileNotFoundError('No datastream found at {}'.format(data_path))
-            file_reader, dur = ndu.open_file_reader(data_path, feature_info['type'])
-            durations[d] = dur
-            data[d] = file_reader
-
-        return data, durations
-
-    def _get_data_reader_len(self, data_reader):
-        return
+    def _open_data_reader_for_session(self, session):
+        for data_id, data in self.data_info.items():
+            data_path = os.path.join(self.nova_data_dir, self.dataset, session, data_id)
+            data.open_file_reader(data_path)
 
     def _generate_examples(self):
             """Yields examples."""
@@ -308,17 +248,14 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
             # Needed to sort the samples later and assure that the order is the same as in nova. Necessary for CML till the tfds can be returned in order.
             sample_counter = 1
 
-            # Fetching all annotations that are available for the respective schemes and roles
             for session in self.sessions:
 
                 # Gather all data we need for this session
-                annotation = self._get_annotation_for_session(session, time_in_ms=True)
+                self._load_annotation_for_session(session, time_to_ms=True)
+                self._open_data_reader_for_session(session)
 
-                # Converting anno times from s to ms
-
-                data, durations = self._get_data_reader_for_session(session)
                 session_info = self.nova_db_handler.get_session_info(self.dataset, session)[0]
-                dur = min( *list(durations.values()), session_info['duration'] )
+                dur = min(*[v.dur for k,v in self.data_info.items()], session_info['duration'] )
 
                 if not dur:
                     raise ValueError('Session {} has no duration.'.format(session))
@@ -330,14 +267,12 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
                 # Generate samples for this session
                 while c_pos_ms + self.stride_ms + self.right_context_ms <= min(self.end_ms, dur_ms):
-                    sample_start_ms = c_pos_ms - self.left_context_ms
-                    sample_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
-                    key = session + '_' + str(sample_start_ms / 1000) + '_' + str(sample_end_ms / 1000)
+                    frame_start_ms = c_pos_ms - self.left_context_ms
+                    frame_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
+                    key = session + '_' + str(frame_start_ms / 1000) + '_' + str(frame_end_ms / 1000)
 
-                    labels_for_frame = [{k: self._get_label_for_frame(v, sample_start_ms, sample_end_ms, k)} for k, v in
-                                       annotation.items()]
-                    data_for_frame = [{k: self._get_data_for_frame(v, self._info_data[k]['type'], self._info_data[k]['sr'],
-                                                                  sample_start_ms, sample_end_ms)} for k, v in data.items()]
+                    labels_for_frame = [{k: v.get_label_for_frame(frame_start_ms, frame_end_ms)} for k, v in self.label_info.items()]
+                    data_for_frame = [{k: v.get_chunk(frame_start_ms, frame_end_ms)} for k, v in self.data_info.items()]
 
                     sample_dict = {}
 
@@ -370,5 +305,5 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                         sample_counter += 1
 
                 # closing file readers for this session
-                for d, fr in data.items():
-                    ndu.close_file_reader(fr, self._info_data[d]['feature'])
+                for k,v in self.data_info.items():
+                    v.close_file_reader()

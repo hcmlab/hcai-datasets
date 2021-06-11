@@ -102,10 +102,14 @@ class NovaDBHandler():
 
     mongo_schemes = []
     for scheme in schemes:
-      mongo_schemes.append(self.get_docs_by_prop(scheme, 'name', dataset, SCHEME_COLLECTION)[0])
+      mongo_scheme = self.get_docs_by_prop(scheme, 'name', dataset, SCHEME_COLLECTION)
+      if not mongo_scheme:
+        print('WARNING: No scheme {} found in database'.format(scheme))
+      else:
+        mongo_schemes.append(mongo_scheme[0])
 
     if not mongo_schemes:
-      raise ValueError('no entries with scheme {} found'.format(schemes))
+      raise ValueError('No entries for schemes {} found in database'.format(schemes))
 
     return mongo_schemes
 
@@ -138,7 +142,11 @@ class NovaDBHandler():
 
     mongo_streams = []
     for stream in data_streams:
-      mongo_streams.append(self.get_docs_by_prop(stream, 'name', dataset, STREAM_COLLECTION)[0])
+      mongo_stream = self.get_docs_by_prop(stream, 'name', dataset, STREAM_COLLECTION)
+      if not mongo_stream:
+        print('WARNING: No stream {} found in database'.format(stream))
+      else:
+        mongo_streams.append(mongo_stream[0])
 
     if not mongo_streams:
       raise ValueError('no entries with scheme {} found'.format(data_streams))
@@ -211,19 +219,19 @@ class NovaDBHandler():
 
     mongo_schemes = self.get_docs_by_prop(scheme, 'name', dataset, SCHEME_COLLECTION)
     if not mongo_schemes:
-      print('no entries with scheme {} found'.format(scheme))
+      print('No entries with scheme {} found'.format(scheme))
       exit()
     mongo_annotators = self.get_docs_by_prop(annotator, 'name', dataset, ANNOTATOR_COLLECTION)
     if not mongo_annotators:
-      print('no entries for annotator {} found'.format(annotator))
+      print('No entries for annotator {} found'.format(annotator))
       exit()
     mongo_roles = self.get_docs_by_prop(roles, 'name', dataset, ROLE_COLLECTION)
     if not mongo_roles:
-      print('no entries for role {} found'.format(roles))
+      print('No entries for role {} found'.format(roles))
       exit()
     mongo_sessions = self.get_docs_by_prop(session, 'name', dataset, SESSION_COLLECTION)
     if not mongo_sessions:
-      print('no entries for session {} found'.format(session))
+      print('No entries for session {} found'.format(session))
       exit()
 
     mongo_annos = self.get_annotation_docs(mongo_schemes, mongo_sessions, mongo_annotators, mongo_roles, dataset, ANNOTATION_COLLECTION)
