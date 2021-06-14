@@ -91,7 +91,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         # Retrieving meta information from the database
         mongo_schemes = self.nova_db_handler.get_schemes(dataset=dataset, schemes=schemes)
         mongo_data = self.nova_db_handler.get_data_streams(dataset=dataset, data_streams=data_streams)
-        self.label_info = self._populate_labels_from_mongo_doc(mongo_schemes)
+        self.label_info = self._populate_label_info_from_mongo_doc(mongo_schemes)
         self.data_info = self._populate_data_info_from_mongo_doc(mongo_data)
 
         # setting supervised keys
@@ -151,7 +151,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
             #disable_shuffling=True
         )
 
-    def _populate_labels_from_mongo_doc(self, mongo_schemes):
+    def _populate_label_info_from_mongo_doc(self, mongo_schemes):
         """
         Setting self.label_info
         Args:
@@ -174,10 +174,11 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                     labels = scheme['labels']
                     label_info[label_id] = nau.DiscreteAnnotation(role=role, add_rest_class=True, scheme=scheme_name, is_valid=scheme_valid, labels=labels)
 
-                elif scheme_type == nt.AnnoTypes.POLYGON:
-                    #label_info[label_id] = tfds.features.Sequence( tfds.features.Tensor(shape=(2,), dtype=np.int32 ) )
-                    #TODO: Set labelinfo that includes samplerate
-                    ...
+                elif scheme_type == nt.AnnoTypes.DISCRETE_POLYGON:
+                    labels = scheme['labels']
+                    sr = scheme['sr']
+                    label_info[label_id] = nau.DiscretePolygonAnnotation(role=role, scheme=scheme_name,
+                                                                         is_valid=scheme_valid, labels=labels, sr=sr)
 
                 else:
                     raise ValueError('Invalid label type {}'.format(scheme['type']))
@@ -202,7 +203,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 dtype = nt.string_to_enum(nt.DataTypes, data_stream['type'])
 
                 if dtype == nt.DataTypes.VIDEO:
-                    raise NotImplementedError('Video files are not yet supported')
+                    data = VideoData(role=role, name=data_stream['name'], file_ext=data_stream['fileExt'], sr=data_stream['sr'], is_valid=data_stream['isValid'], sample_data_path=sample_data_path)
                 elif dtype == nt.DataTypes.AUDIO:
                     raise NotImplementedError('Audio files are not yet supported')
                 elif dtype == nt.DataTypes.FEATURE:
@@ -213,14 +214,11 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 data_id = merge_role_key(role=role, key=data_stream['name'])
                 data_info[data_id] = data
 
-
         return data_info
 
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
         return {'dynamic_split': self._generate_examples()}
-
-
 
     def _get_data_for_frame(self, file_reader, feature_type, sr, start, end):
         start_frame = ndu.milli_seconds_to_frame(sr, start)
@@ -239,7 +237,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
 
     def _open_data_reader_for_session(self, session):
         for data_id, data in self.data_info.items():
-            data_path = os.path.join(self.nova_data_dir, self.dataset, session, data_id)
+            data_path = os.path.join(self.nova_data_dir, self.dataset, session, data_id + '.' + data.file_ext)
             data.open_file_reader(data_path)
 
     def _generate_examples(self):

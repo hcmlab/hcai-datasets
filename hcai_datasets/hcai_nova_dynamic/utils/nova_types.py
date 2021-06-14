@@ -12,7 +12,7 @@ class AnnoTypes(Enum):
   CONTINOUS = 1
   FREE = 2
   POINT = 3
-  POLYGON = 4
+  DISCRETE_POLYGON = 4
 
 
 '''Helper'''

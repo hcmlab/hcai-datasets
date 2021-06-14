@@ -127,7 +127,6 @@ class NovaDBHandler():
     mongo_session = self.get_docs_by_prop(session, 'name', dataset, SESSION_COLLECTION)
     return mongo_session
 
-
   def get_data_streams(self, dataset, data_streams):
     """
     Fetches the stream objects that matches the specified criteria from the nova database and returns them as a python readable dictionary.
