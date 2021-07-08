@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 import tensorflow_datasets as tfds
+import tensorflow as tf
 from hcai_datasets.hcai_nova_dynamic.utils import nova_types as nt
 from hcai_datasets.hcai_nova_dynamic.utils.ssi_stream_utils import Stream
 from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import merge_role_key, split_role_key
@@ -10,12 +11,21 @@ from abc import ABC, abstractmethod
 
 class Data(ABC):
 
-    def __init__(self,  role: str = '', name: str = '', file_ext: str = 'stream', sr: int = 0, is_valid: bool = True, sample_data_path: str = ''):
+    lazy_connector = tfds.features.FeaturesDict({
+        'frame_start': tf.dtypes.float32,
+        'frame_end': tf.dtypes.float32,
+        'file_path': tfds.features.Text()
+    })
+
+
+    def __init__(self,  role: str = '', name: str = '', file_ext: str = 'stream', sr: int = 0, data_type: nt.DataTypes = None, is_valid: bool = True, sample_data_path: str = '', lazy_loading: bool = False):
         self.role = role
         self.name = name
         self.is_valid = is_valid
         self.sr = sr
         self.file_ext = file_ext
+        self.lazy_loading = lazy_loading
+        self.data_type = data_type
 
         # Set when populate_meta_info is called
         self.sample_data_shape = None
@@ -23,6 +33,7 @@ class Data(ABC):
         self.meta_loaded = False
 
         # Set when open_file_reader is called
+        self.file_path = None
         self.file_reader = None
         self.dur = None
 
@@ -34,22 +45,53 @@ class Data(ABC):
             print('No datastream opened for {}'.format(merge_role_key(self.role, self.name)))
             raise RuntimeError('Datastream not loaded')
 
-    @abstractmethod
+
     def get_tf_info(self):
+        if self.meta_loaded:
+            if self.lazy_loading:
+                feature_connector = self.lazy_connector
+                key = merge_role_key(self.role, self.name)
+                return (key, feature_connector)
+            else:
+                return self.get_tf_info_hook()
+        else:
+            print('Meta data has not been loaded for file {}. Call get_meta_info() first.'.format(
+                merge_role_key(self.role, self.name)))
+
+
+    def get_sample(self, frame_start: int, frame_end: int):
+        """
+        Returns the sample for the respective frames. If lazy loading is true, only the filepath and frame_start, frame_end will be returned.
+        """
+        if self.lazy_loading:
+            return {
+                'frame_start': frame_start,
+                'frame_end': frame_end,
+                'file_path': self.file_path
+            }
+        else:
+            return self.get_sample_hook(frame_start, frame_end)
+
+    def open_file_reader(self, path: str):
+        self.file_path = path
+        self.open_file_reader_hook(path)
+
+    @abstractmethod
+    def get_tf_info_hook(self):
         """
         Returns the features for this datastream to create the DatasetInfo for tensorflow
         """
         ...
 
     @abstractmethod
-    def get_chunk(self, start_frame: int, end_frame: int):
+    def get_sample_hook(self, start_frame: int, end_frame: int):
         """
         Returns a data chunk from start frame to end frame
         """
         ...
 
     @abstractmethod
-    def open_file_reader(self, path: str):
+    def open_file_reader_hook(self, path: str):
         """
         Opens a filereader for the respective datastream. Sets attributes self.file_reader and self.dur
         """
@@ -69,23 +111,21 @@ class Data(ABC):
         """
         ...
 
+
 class AudioData(Data):
     pass
+
 
 class VideoData(Data):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def get_tf_info(self) -> (str, tfds.features.Sequence):
-        if self.meta_loaded:
-            feature_connector = tfds.features.Sequence(
-                tfds.features.Image(shape=self.sample_data_shape, dtype=np.uint8))
-            return merge_role_key(self.role, self.name), feature_connector
-        else:
-            print('Video resolution hast not been loaded for video {}. Call get_meta_info() first.'.format(
-            merge_role_key(self.role, self.name)))
+    def get_tf_info_hook(self) -> (str, tfds.features.Sequence):
+        feature_connector = tfds.features.Sequence(
+        tfds.features.Image(shape=self.sample_data_shape, dtype=np.uint8))
+        return merge_role_key(self.role, self.name), feature_connector
 
-    def get_chunk(self, frame_start_ms: int, frame_end_ms: int):
+    def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
         start_frame = frame_start_ms / 1000 * self.sr
         end_frame = frame_end_ms / 1000 * self.sr
         length = int(end_frame - start_frame)
@@ -104,7 +144,7 @@ class VideoData(Data):
 
         return chunk
 
-    def open_file_reader(self, path: str):
+    def open_file_reader_hook(self, path: str):
         if not os.path.isfile(path):
             print('Session file not found at {}.'.format(path))
             raise FileNotFoundError()
@@ -127,28 +167,26 @@ class VideoData(Data):
     def close_file_reader(self):
         return self.file_reader.release()
 
+
 class StreamData(Data):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def get_tf_info(self) -> (str, tfds.features.Sequence):
-        if self.meta_loaded:
-            feature_connector = tfds.features.Sequence(tfds.features.Tensor(shape=self.sample_data_shape, dtype=self.tf_data_type))
-            return merge_role_key(self.role, self.name), feature_connector
-        else:
-            print('No datashape and type have been loaded for stream {}. Call get_meta_info() first.'.format(merge_role_key(self.role, self.name)))
+    def get_tf_info_hook(self) -> (str, tfds.features.Sequence):
+        feature_connector = tfds.features.Sequence(tfds.features.Tensor(shape=self.sample_data_shape, dtype=self.tf_data_type))
+        return merge_role_key(self.role, self.name), feature_connector
 
-    def get_chunk(self, frame_start_ms: int, frame_end_ms: int):
+    def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
         try:
             self.data_stream_opend()
             start_frame = milli_seconds_to_frame(self.sr, frame_start_ms)
             end_frame = milli_seconds_to_frame(self.sr, frame_end_ms)
             return self.file_reader.data[start_frame:end_frame]
         except RuntimeError:
-            print('Could not get chunk {}-{} from data stream {}'.format(start_frame, end_frame, merge_role_key(self.role, self.name)))
+            print('Could not get chunk {}-{} from data stream {}'.format(frame_start_ms, frame_end_ms, merge_role_key(self.role, self.name)))
 
-    def open_file_reader(self, path: str) -> bool:
+    def open_file_reader_hook(self, path: str) -> bool:
         stream = Stream(path)
         if stream:
             self.file_reader = stream
@@ -166,7 +204,6 @@ class StreamData(Data):
         self.sample_data_shape = (stream.dim,)
         self.tf_data_type = stream.tftype
         self.meta_loaded = True
-
 
 ##########################
 # General helper functions

@@ -62,6 +62,7 @@ class DiscreteAnnotation(Annotation):
 
     def get_label_for_frame(self, start, end):
 
+
         # If we don't have any data we return the garbage label
         if self.data == -1:
             return -1

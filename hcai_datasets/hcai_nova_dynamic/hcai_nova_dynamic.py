@@ -44,7 +44,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                  annotator=None,
                  schemes=None, roles=None, data_streams=None, start=None, end=None, left_context='0', right_context='0',
                  frame_size='1', stride=None,
-                 flatten_samples=False, supervised_keys=None, clear_cache=True, add_rest_class = True,
+                 flatten_samples=False, supervised_keys=None, clear_cache=True, add_rest_class=True, lazy_loading=False,
                  **kwargs):
         """
         Initialize the HcaiNovaDynamic dataset builder
@@ -86,6 +86,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         self.flatten_samples = flatten_samples
         self.clear_cache = clear_cache
         self.add_rest_class = add_rest_class
+        self.lazy_loading = lazy_loading
         self.nova_db_handler = NovaDBHandler(db_config_path, db_config_dict)
 
         # Retrieving meta information from the database
@@ -207,7 +208,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 elif dtype == nt.DataTypes.AUDIO:
                     raise NotImplementedError('Audio files are not yet supported')
                 elif dtype == nt.DataTypes.FEATURE:
-                    data = StreamData(role=role, name=data_stream['name'], sr=data_stream['sr'], is_valid=data_stream['isValid'], sample_data_path=sample_data_path)
+                    data = StreamData(role=role, name=data_stream['name'], sr=data_stream['sr'], data_type=dtype, is_valid=data_stream['isValid'], sample_data_path=sample_data_path, lazy_loading=self.lazy_loading)
                 else:
                     raise ValueError('Invalid data type {}'.format(data_stream['type']))
 
@@ -220,15 +221,15 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
         """Returns SplitGenerators."""
         return {'dynamic_split': self._generate_examples()}
 
-    def _get_data_for_frame(self, file_reader, feature_type, sr, start, end):
-        start_frame = ndu.milli_seconds_to_frame(sr, start)
-        end_frame = ndu.milli_seconds_to_frame(sr, end)
-        if feature_type == nt.DataTypes.VIDEO:
-            return ndu.chunk_vid(file_reader, start_frame, end_frame)
-        elif feature_type == nt.DataTypes.AUDIO:
-            raise NotImplementedError('Data chunking for audio is not yet implemented')
-        elif feature_type == nt.DataTypes.FEATURE:
-            return ndu.chunk_stream(file_reader, start_frame, end_frame)
+    # def _get_data_for_frame(self, file_reader, feature_type, sr, start, end):
+    #     start_frame = ndu.milli_seconds_to_frame(sr, start)
+    #     end_frame = ndu.milli_seconds_to_frame(sr, end)
+    #     if feature_type == nt.DataTypes.VIDEO:
+    #         return ndu.chunk_vid(file_reader, start_frame, end_frame)
+    #     elif feature_type == nt.DataTypes.AUDIO:
+    #         raise NotImplementedError('Data chunking for audio is not yet implemented')
+    #     elif feature_type == nt.DataTypes.FEATURE:
+    #         return ndu.chunk_stream(file_reader, start_frame, end_frame)
 
     def _load_annotation_for_session(self, session, time_to_ms=False):
         for label_id, anno in self.label_info.items():
@@ -253,7 +254,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 self._open_data_reader_for_session(session)
 
                 session_info = self.nova_db_handler.get_session_info(self.dataset, session)[0]
-                dur = min(*[v.dur for k,v in self.data_info.items()], session_info['duration'] )
+                dur = int(min(*[v.dur for k,v in self.data_info.items()], session_info['duration'] ))
 
                 if not dur:
                     raise ValueError('Session {} has no duration.'.format(session))
@@ -270,7 +271,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                     key = session + '_' + str(frame_start_ms / 1000) + '_' + str(frame_end_ms / 1000)
 
                     labels_for_frame = [{k: v.get_label_for_frame(frame_start_ms, frame_end_ms)} for k, v in self.label_info.items()]
-                    data_for_frame = [{k: v.get_chunk(frame_start_ms, frame_end_ms)} for k, v in self.data_info.items()]
+                    data_for_frame = [{k: v.get_sample(frame_start_ms, frame_end_ms)} for k, v in self.data_info.items()]
 
                     sample_dict = {}
 
