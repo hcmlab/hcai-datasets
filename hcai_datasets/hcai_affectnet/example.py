@@ -1,0 +1,23 @@
+import os
+import tensorflow as tf
+import tensorflow_datasets as tfds
+import hcai_datasets
+from matplotlib import pyplot as plt
+
+## Load Data
+ds, ds_info = tfds.load(
+  'hcai_affectnet',
+  split='test',
+  with_info=True,
+  as_supervised=False,
+  builder_kwargs={'dataset_dir': os.path.join('\\\\137.250.171.12', 'Korpora', 'AffectNet')}
+)
+
+ds_iter = ds.as_numpy_iterator()
+class_names = ds_info.features._feature_dict['expression'].names
+
+for i in range(100):
+  sample = next(ds_iter)
+  plt.imshow(sample['image'] / 255.)
+  plt.title(class_names[sample['expression']])
+  plt.show()
