@@ -5,12 +5,13 @@ This repository contains code to make datasets stored on th corpora network driv
 
 | Dataset       | Status        | Url  |
 | :------------- |:-------------:| :-----|
-| audioset      | ❌              | https://research.google.com/audioset/ |
 | ckplus        | ✅             | http://www.iainm.com/publications/Lucey2010-The-Extended/paper.pdf |
+| affectnet     | ✅             | http://mohammadmahoor.com/affectnet/ |
 | faces         | ✅             |    https://faces.mpdl.mpg.de/imeji/ |
+| nova_dynamic  | ✅             |    https://github.com/hcmlab/nova |
+| audioset      | ❌             | https://research.google.com/audioset/ |
 | is2021_ess    | ❌             |    -|
-| librispeech   | ❌              |    https://www.openslr.org/12 |
-| nova_dynamic   | ✅              |    https://github.com/hcmlab/nova |
+| librispeech   | ❌             |    https://www.openslr.org/12 |
 
 
 ### Example Usage
