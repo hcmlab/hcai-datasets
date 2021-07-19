@@ -98,6 +98,7 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder):
                     "facial_landmarks": tfds.features.Tensor(
                         shape=(68, 2), dtype=tf.float32
                     ),
+                    "file_name": tf.string
                     #'face_bbox': tfds.features.BBox(),
                 }
             ),
@@ -190,4 +191,6 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder):
                 "facial_landmarks": np.fromstring(
                     row["facial_landmarks"], sep=";", dtype=np.float32
                 ).reshape((68, 2)),
+                "file_name": row[self.IMAGE_FOLDER_COL] + '/' + index
             }
+
