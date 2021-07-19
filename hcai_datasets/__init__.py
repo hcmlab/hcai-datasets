@@ -1,4 +1,5 @@
 '''Image Datasets'''
+from hcai_datasets import hcai_affectnet
 from hcai_datasets import hcai_ckplus
 from hcai_datasets import hcai_faces
 

@@ -7,7 +7,6 @@ import json
 import numpy as np
 from pathlib import Path
 
-# TODO(hcai_affectnet): Markdown description  that will appear on the catalog page.
 _DESCRIPTION = """
 Affectnet is a dataset that has been crawled from the internet and annotated with respect to affective classes as well as valence and arousal.
 The annotations also include automatically extracted facial landmarks.
@@ -16,7 +15,6 @@ Since there is currently no official test set available the validation set is us
 The number of images in test is only 5499 since one corrupt image has been deleted
 """
 
-# TODO(hcai_affectnet): BibTeX citation
 _CITATION = """
 @article{mollahosseini2017affectnet,
   title={Affectnet: A database for facial expression, valence, and arousal computing in the wild},
