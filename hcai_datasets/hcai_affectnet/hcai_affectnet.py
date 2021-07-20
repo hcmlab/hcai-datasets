@@ -6,6 +6,9 @@ import pandas as pd
 import json
 import numpy as np
 from pathlib import Path
+from tensorflow_datasets.core.splits import Split
+from hcai_dataset_utils.statistics import Statistics
+
 
 _DESCRIPTION = """
 Affectnet is a dataset that has been crawled from the internet and annotated with respect to affective classes as well as valence and arousal.
@@ -56,7 +59,7 @@ class HcaiAffectnetConfig(tfds.core.BuilderConfig):
         self.ignore_lists = ignore_lists
 
 
-class HcaiAffectnet(tfds.core.GeneratorBasedBuilder):
+class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
     """DatasetBuilder for hcai_affectnet dataset."""
 
     BUILDER_CONFIGS = [
@@ -68,7 +71,7 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder):
 
     def __init__(self, *, dataset_dir=None, **kwargs):
         self.dataset_dir = dataset_dir
-        self.labels = [
+        self.LABELS = [
             "neutral",
             "happy",
             "sad",
@@ -88,23 +91,21 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder):
         return tfds.core.DatasetInfo(
             builder=self,
             description=_DESCRIPTION,
+            metadata=tfds.core.MetadataDict({}),
             features=tfds.features.FeaturesDict(
                 {
                     # These are the features of your dataset like images, labels ...
                     "image": tfds.features.Image(shape=(None, None, 3)),
-                    "expression": tfds.features.ClassLabel(names=self.labels),
+                    "expression": tfds.features.ClassLabel(names=self.LABELS),
                     "arousal": tf.float32,
                     "valence": tf.float32,
                     "facial_landmarks": tfds.features.Tensor(
                         shape=(68, 2), dtype=tf.float32
                     ),
-                    "file_name": tf.string
+                    "rel_file_path": tf.string
                     #'face_bbox': tfds.features.BBox(),
                 }
             ),
-            # If there's a common (input, target) tuple from the
-            # features, specify them here. They'll be used if
-            # `as_supervised=True` in `builder.as_dataset`.
             supervised_keys=(
                 "image",
                 "expression",
@@ -112,6 +113,19 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder):
             homepage="https://dataset-homepage/",
             citation=_CITATION,
         )
+
+    def _populate_meta_data(self, data):
+        for split_name, df in data:
+            # Filter only necessary columns
+            df_filtered = df.filter(["expression", "arousal", "valence"])
+
+            # Replacing -2 values with nan for the statistics
+            df_filtered = df_filtered.applymap(lambda x: np.nan if x == -2 else x)
+
+            # Converting integer to type object to enable correct description
+            convert_dict = {'expression': 'object'}
+            df_filtered = df_filtered.astype(convert_dict)
+            self._populate_stats(df_filtered, split_name)
 
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
@@ -134,7 +148,6 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder):
         test_df = pd.read_csv(test_csv_path, index_col=0)
         train_df[self.IMAGE_FOLDER_COL] = ["Manually_Annotated_Images"] * len(train_df)
         test_df[self.IMAGE_FOLDER_COL] = ["Manually_Annotated_Images"] * len(test_df)
-
 
         # append automatic labels if not ignored:
         if self.builder_config.include_auto:
@@ -166,19 +179,21 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder):
         )
 
         # split train in validation an train
-        print("Splitting validation set")
+        """print("Splitting validation set")
         val_df = train_df.sample(frac=0.2, random_state=1337)
         train_df = train_df.drop(val_df.index)
+        """
         print(
-            "Final set sizes: \nTrain {}\nVal {}\n Test{}".format(
-                len(train_df), len(val_df), len(test_df)
-            )
+            "Final set sizes: \nTrain {}\nTest {}".format(len(train_df), len(test_df))
         )
 
+        data = [(Split.TRAIN, train_df), (Split.TEST, test_df)]
+
+        self._populate_meta_data(data)
+
         return {
-            "train": self._generate_examples(train_df),
-            "val": self._generate_examples(val_df),
-            "test": self._generate_examples(test_df),
+            split_name: self._generate_examples(split_data)
+            for split_name, split_data in data
         }
 
     def _generate_examples(self, label_df):
@@ -191,6 +206,5 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder):
                 "facial_landmarks": np.fromstring(
                     row["facial_landmarks"], sep=";", dtype=np.float32
                 ).reshape((68, 2)),
-                "file_name": row[self.IMAGE_FOLDER_COL] + '/' + index
+                "rel_file_path": row[self.IMAGE_FOLDER_COL] + "/" + index,
             }
-

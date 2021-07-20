@@ -28,7 +28,7 @@ class HcaiIs2021Ess(tfds.core.GeneratorBasedBuilder):
 
   def _info(self) -> tfds.core.DatasetInfo:
     """Returns the dataset metadata."""
-    # TODO(hcai_is2021_ess): Specifies the tfds.core.DatasetInfo object
+    # TODO(hcai_is2021_ess): Specifies the tfds.util.DatasetInfo object
     return tfds.core.DatasetInfo(
         builder=self,
         description=_DESCRIPTION,
