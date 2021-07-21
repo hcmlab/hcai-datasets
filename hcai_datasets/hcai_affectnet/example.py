@@ -6,15 +6,15 @@ import hcai_datasets
 ds, ds_info = tfds.load(
     "hcai_affectnet",
     split="train",
-    decoders={
-        "image": tfds.decode.SkipDecoding(),
-    },
+    #decoders={
+    #    "image": tfds.decode.SkipDecoding(),
+    #},
     with_info=True,
     as_supervised=False,
     builder_kwargs={"dataset_dir": os.path.join("\\\\137.250.171.12", "Korpora", "AffectNet")},
 )
 
-tfds.show_examples(ds, ds_info)
+tfds.show_examples(ds, ds_info, cols=3, rows=20)
 
 
 # ds_iter = ds.as_numpy_iterator()

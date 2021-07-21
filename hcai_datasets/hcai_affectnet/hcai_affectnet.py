@@ -114,7 +114,12 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
             citation=_CITATION,
         )
 
-    def _populate_meta_data(self, data):
+    def _populate_meta_data(self, data: pd.DataFrame):
+        """
+        Updating the metadata dictionary
+        Args:
+            data: the dataframe that will be used for calulating the metadata
+        """
         for split_name, df in data:
             # Filter only necessary columns
             df_filtered = df.filter(["expression", "arousal", "valence"])
@@ -123,7 +128,7 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
             df_filtered = df_filtered.applymap(lambda x: np.nan if x == -2 else x)
 
             # Converting integer to type object to enable correct description
-            convert_dict = {'expression': 'object'}
+            convert_dict = {"expression": "object"}
             df_filtered = df_filtered.astype(convert_dict)
             self._populate_stats(df_filtered, split_name)
 
