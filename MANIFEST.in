@@ -2,3 +2,5 @@ recursive-exclude * __pycache__
 recursive-exclude * example.py
 recursive-exclude * db.cfg
 recursive-exclude * *.flac
+include hcai_datasets/hcai_affectnet/Ignore_Lists/*
+include hcai_datasets/hcai_affectnet/Ignore_Lists/helper_lists/*
