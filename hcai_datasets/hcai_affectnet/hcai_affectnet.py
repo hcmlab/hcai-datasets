@@ -31,7 +31,7 @@ _CITATION = """
 }
 """
 
-VERSION = tfds.core.Version("4.3.0")
+VERSION = tfds.core.Version("1.0.0")
 RELEASE_NOTES = {
     "1.0.0": "Initial release.",
 }
