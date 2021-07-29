@@ -41,12 +41,14 @@ class HcaiAffectnetConfig(tfds.core.BuilderConfig):
     """BuilderConfig for HcaiAffectnetConfig."""
 
     def __init__(
-        self, *, include_auto=False, ignore_duplicate=True, ignore_lists=None, **kwargs
+        self, *, include_auto=False, ignore_duplicate=True,  ignore_wrong_format=True, ignore_lists=None, **kwargs
     ):
         """BuilderConfig for HcaiAffectnetConfig.
         Args:
+          ignore_duplicate: bool. Flag to determine whether the duplicated files in the dataset should be included.
+          ignore_wrong_format:  bool. Flag to determine whether files that are not in tensorflow compatible encoding should be ignored.
+          ignore_lists: list. Custom ignore lists for additional configurations.
           include_auto: bool. Flag to determine whether the automatically annotated files should be included in the dataset.
-          include_auto: bool. Flag to determine whether the duplicated files in the dataset should be included.
           **kwargs: keyword arguments forwarded to super.
         """
         super(HcaiAffectnetConfig, self).__init__(version=VERSION, **kwargs)
@@ -55,6 +57,10 @@ class HcaiAffectnetConfig(tfds.core.BuilderConfig):
 
         if ignore_duplicate:
             ignore_lists.append("affect_net_ignore_list_duplicates.json")
+
+        if ignore_wrong_format:
+            ignore_lists.append("affect_net_ignore_list_wrong_format.json")
+
         self.include_auto = include_auto
         self.ignore_lists = ignore_lists
 
@@ -63,8 +69,8 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
     """DatasetBuilder for hcai_affectnet dataset."""
 
     BUILDER_CONFIGS = [
-        HcaiAffectnetConfig(name="default", include_auto=False, ignore_duplicate=True),
-        HcaiAffectnetConfig(name="inc_auto", include_auto=True, ignore_duplicate=True),
+        HcaiAffectnetConfig(name="default", include_auto=False, ignore_duplicate=True, ignore_wrong_format=True),
+        HcaiAffectnetConfig(name="inc_auto", include_auto=True, ignore_duplicate=True, ignore_wrong_format=True),
     ]
 
     IMAGE_FOLDER_COL = "image_folder"
@@ -169,19 +175,20 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
         )
 
         # removing labels that are specified in the ignore-lists
-        print("Apply filtering...")
+        print("Apply duplicate filtering...")
 
         filter_list_path = Path(__file__).parent / "Ignore_Lists"
         for filter_list in self._builder_config.ignore_lists:
+            print('... {}:'.format(filter_list))
             with open(filter_list_path / filter_list) as json_file:
                 filter = json.load(json_file)
                 train_df.drop(filter, errors="ignore", inplace=True)
                 test_df.drop(filter, errors="ignore", inplace=True)
-        print(
-            "...dropped {} images from train\n... dropped {} images from test".format(
-                len_train - len(train_df), len_test - len(test_df)
+            print(
+                "\t...dropped {} images from train\n\t... dropped {} images from test".format(
+                    len_train - len(train_df), len_test - len(test_df)
+                )
             )
-        )
 
         # split train in validation an train
         """print("Splitting validation set")
