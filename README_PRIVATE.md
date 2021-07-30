@@ -1,6 +1,8 @@
 ### Building Pypi package ###
 
 build: ```python -m build```
+build: ```python setup.py bdist_wheel```
+build nightly: ``python setup.py bdist_wheel --nightly```
 
 upload test: ```python -m twine upload --repository testpypi dist/*```
 
