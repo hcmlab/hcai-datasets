@@ -219,6 +219,7 @@ class NovaDBHandler():
     mongo_schemes = self.get_docs_by_prop(scheme, 'name', dataset, SCHEME_COLLECTION)
     if not mongo_schemes:
       print('No entries with scheme {} found'.format(scheme))
+      #TODO: replace with exceptions for better handling
       exit()
     mongo_annotators = self.get_docs_by_prop(annotator, 'name', dataset, ANNOTATOR_COLLECTION)
     if not mongo_annotators:

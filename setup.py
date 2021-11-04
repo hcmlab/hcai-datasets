@@ -36,10 +36,10 @@ if nightly:
 setup(
     name=project_name,
     version=__version__,
-    description="!Alpha Version! - This repository contains code to make datasets stored on the corpora network drive of the chair compatible with the [tensorflow dataset api](https://www.tensorflow.org/api_docs/python/tf/data/Dataset)",
+    description="!Alpha Version! - This repository contains the backend server for the nova annotation ui (https://github.com/hcmlab/nova)",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/pypa/sampleproject",
+    url="https://github.com/hcmlab/nova-server",
     author="Dominik Schiller",
     author_email="dominik.schiller@uni-a.de",
     classifiers=[
