@@ -41,12 +41,18 @@ class HcaiAffectnetConfig(tfds.core.BuilderConfig):
     """BuilderConfig for HcaiAffectnetConfig."""
 
     def __init__(
-        self, *, include_auto=False, ignore_duplicate=True,  ignore_wrong_format=True, ignore_lists=None, **kwargs
+        self,
+        *,
+        include_auto=False,
+        ignore_duplicate=True,
+        ignore_unsupported_format=True,
+        ignore_lists=None,
+        **kwargs
     ):
         """BuilderConfig for HcaiAffectnetConfig.
         Args:
-          ignore_duplicate: bool. Flag to determine whether the duplicated files in the dataset should be included.
-          ignore_wrong_format:  bool. Flag to determine whether files that are not in tensorflow compatible encoding should be ignored.
+          ignore_duplicate: bool. Flag to determine whether the duplicated files in the dataset should be included. Only affects the training set.
+          ignore_wrong_format:  bool. Flag to determine whether files that are not in tensorflow compatible encoding should be ignored. Affects all sets.
           ignore_lists: list. Custom ignore lists for additional configurations.
           include_auto: bool. Flag to determine whether the automatically annotated files should be included in the dataset.
           **kwargs: keyword arguments forwarded to super.
@@ -58,7 +64,7 @@ class HcaiAffectnetConfig(tfds.core.BuilderConfig):
         if ignore_duplicate:
             ignore_lists.append("affect_net_ignore_list_duplicates.json")
 
-        if ignore_wrong_format:
+        if ignore_unsupported_format:
             ignore_lists.append("affect_net_ignore_list_wrong_format.json")
 
         self.include_auto = include_auto
@@ -69,8 +75,25 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
     """DatasetBuilder for hcai_affectnet dataset."""
 
     BUILDER_CONFIGS = [
-        HcaiAffectnetConfig(name="default", include_auto=False, ignore_duplicate=True, ignore_wrong_format=True),
-        HcaiAffectnetConfig(name="inc_auto", include_auto=True, ignore_duplicate=True, ignore_wrong_format=True),
+        HcaiAffectnetConfig(
+            name="default",
+            include_auto=False,
+            ignore_duplicate=True,
+            ignore_unsupported_format=True,
+        ),
+        HcaiAffectnetConfig(
+            name="inc_auto",
+            include_auto=True,
+            ignore_duplicate=True,
+            ignore_unsupported_format=True,
+        ),
+        HcaiAffectnetConfig(
+            name="emo_net",
+            include_auto=False,
+            ignore_duplicate=True,
+            ignore_unsupported_format=True,
+            ignore_lists=['affect_net_emo_net_ignore_list.json']
+        ),
     ]
 
     IMAGE_FOLDER_COL = "image_folder"
@@ -145,6 +168,8 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
         train_csv_path = (
             Path(self.dataset_dir) / "Manually_Annotated_file_lists" / "training.csv"
         )
+
+        # The official test set has not been released in this version so we use the validation set as test set
         test_csv_path = (
             Path(self.dataset_dir) / "Manually_Annotated_file_lists" / "validation.csv"
         )
@@ -175,11 +200,11 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
         )
 
         # removing labels that are specified in the ignore-lists
-        print("Apply duplicate filtering...")
+        print("Applying ignore lists...")
 
         filter_list_path = Path(__file__).parent / "Ignore_Lists"
         for filter_list in self._builder_config.ignore_lists:
-            print('... {}:'.format(filter_list))
+            print("... {}:".format(filter_list))
             with open(filter_list_path / filter_list) as json_file:
                 filter = json.load(json_file)
                 train_df.drop(filter, errors="ignore", inplace=True)
@@ -189,12 +214,9 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
                     len_train - len(train_df), len_test - len(test_df)
                 )
             )
+            len_train = len(train_df)
+            len_test = len(test_df)
 
-        # split train in validation an train
-        """print("Splitting validation set")
-        val_df = train_df.sample(frac=0.2, random_state=1337)
-        train_df = train_df.drop(val_df.index)
-        """
         print(
             "Final set sizes: \nTrain {}\nTest {}".format(len(train_df), len(test_df))
         )
