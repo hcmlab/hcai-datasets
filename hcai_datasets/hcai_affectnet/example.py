@@ -4,7 +4,7 @@ import hcai_datasets
 
 
 ds, ds_info = tfds.load(
-    "hcai_affectnet",
+    "hcai_affectnet/emo_net",
     split="train",
     #decoders={
     #    "image": tfds.decode.SkipDecoding(),
