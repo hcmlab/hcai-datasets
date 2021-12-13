@@ -131,15 +131,15 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
                     "facial_landmarks": tfds.features.Tensor(
                         shape=(68, 2), dtype=tf.float32
                     ),
-                    "rel_file_path": tf.string
-                    #'face_bbox': tfds.features.BBox(),
+                    "rel_file_path": tf.string,
+                    #"face_bbox": tf.tuple(),
                 }
             ),
             supervised_keys=(
                 "image",
                 "expression",
-            ),  # Set to `None` to disable
-            homepage="https://dataset-homepage/",
+            ),
+            homepage="http://mohammadmahoor.com/affectnet/",
             citation=_CITATION,
         )
 
@@ -232,13 +232,21 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
 
     def _generate_examples(self, label_df):
         for index, row in label_df.iterrows():
+            landmarks = np.fromstring(
+                    row["facial_landmarks"], sep=";", dtype=np.float32
+                ).reshape((68, 2))
+
+            #ymin = row["face_y"]
+            #ymax = row["face_height"] + ymin
+            #xmin = row["face_x"]
+            #xmax = row["face_width"] + xmin
+
             yield index, {
                 "image": Path(self.dataset_dir) / row[self.IMAGE_FOLDER_COL] / index,
                 "expression": row["expression"],
                 "arousal": row["arousal"],
                 "valence": row["valence"],
-                "facial_landmarks": np.fromstring(
-                    row["facial_landmarks"], sep=";", dtype=np.float32
-                ).reshape((68, 2)),
+                "facial_landmarks": landmarks,
                 "rel_file_path": row[self.IMAGE_FOLDER_COL] + "/" + index,
+                #"face_bbox": tfds.features.BBox(ymin=ymin, xmin=xmin, ymax=ymax, xmax=xmax)
             }
