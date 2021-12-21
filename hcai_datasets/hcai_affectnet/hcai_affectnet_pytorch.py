@@ -13,10 +13,13 @@ from torchvision import io
 
 
 class AffectNetPyTorch(Dataset):
-    def __init__(self, dataset_dir, split="train", transform=None, cache_dir=None):
+    def __init__(
+        self, dataset_dir, split="train", transform=None, filters=None, cache_dir=None
+    ):
         self._dataset_dir = dataset_dir
         self._split = split
         self._transform = transform
+        self._filters = filters
         self._cache_dir = cache_dir
         if cache_dir is not None:
             if self._find_cache():
@@ -27,13 +30,16 @@ class AffectNetPyTorch(Dataset):
         else:
             self._index_data_from_source()
 
+        if self._filters is not None:
+            self._filter_indices()
+
     def _find_cache(self):
         return (Path(self._cache_dir) / (self._split + ".dat")).is_file()
 
     def _load_cached(self):
 
         with open(Path(self._cache_dir) / (self._split + ".dat"), "rb") as file:
-            self._preprocessed = pickle.load(file)
+            self._indices = pickle.load(file)
 
         self._dataset_dir = Path(self._cache_dir) / self._split
 
@@ -43,9 +49,9 @@ class AffectNetPyTorch(Dataset):
         ds_dir = Path(self._dataset_dir)
 
         print("building cache...")
-        n = len(self._preprocessed)
+        n = len(self._indices)
 
-        for i, sample in enumerate(self._preprocessed):
+        for i, sample in enumerate(self._indices):
             t = split_path / sample["rel_file_path"]
             t.parent.mkdir(exist_ok=True, parents=True)
             shutil.copy(ds_dir / sample["rel_file_path"], t)
@@ -53,9 +59,21 @@ class AffectNetPyTorch(Dataset):
                 print(f"[{i}|{n}]")
 
         with open(Path(self._cache_dir) / (self._split + ".dat"), "wb") as file:
-            pickle.dump(self._preprocessed, file)
+            pickle.dump(self._indices, file)
 
         self._dataset_dir = split_path
+
+    def _filter_indices(self):
+        i = []
+        for s in self._indices:
+            retain = True
+            for fn in self._filters:
+                if not fn(s):
+                    retain = False
+                    break
+            if retain:
+                i.append(s)
+        self._indices = i
 
     def _index_data_from_source(self):
 
@@ -65,37 +83,51 @@ class AffectNetPyTorch(Dataset):
                 / "Manually_Annotated_file_lists"
                 / "training.csv"
             )
+            filepath_auto = (
+                Path(self._dataset_dir)
+                / "Automatically_Annotated_file_lists"
+                / "training.csv"
+            )
         else:
             filepath = (
                 Path(self._dataset_dir)
                 / "Manually_Annotated_file_lists"
                 / "validation.csv"
             )
+            filepath_auto = None
+
+        self._indices = []
+        self._parse_index_file(filepath, "Manually_Annotated_Images", True)
+        if filepath_auto is not None:
+            self._parse_index_file(
+                filepath_auto, "Automatically_Annotated_Images", False
+            )
+
+    def _parse_index_file(self, filepath, imdir, manual):
 
         df = pd.read_csv(filepath)
-        self._preprocessed = []
         for row in df.iloc:
             landmarks = np.fromstring(
                 row.facial_landmarks, sep=";", dtype=np.float32
             ).reshape((68, 2))
 
-            fpath = "Manually_Annotated_Images/" + row.iloc[0]
             prep = {
-                "rel_file_path": fpath,
+                "rel_file_path": imdir + "/" + row.iloc[0],
                 "expression": row.expression,
                 "arousal": row.arousal,
                 "valence": row.valence,
                 "facial_landmarks": landmarks,
+                "manual": manual
                 # "face_bbox": tfds.features.BBox(ymin=ymin, xmin=xmin, ymax=ymax, xmax=xmax)
             }
-            self._preprocessed.append(prep)
+            self._indices.append(prep)
 
     def __len__(self):
-        return len(self._preprocessed)
+        return len(self._indices)
 
     def __getitem__(self, index) -> T_co:
 
-        row = self._preprocessed[index]
+        row = self._indices[index]
         im = Image.open(Path(self._dataset_dir) / row["rel_file_path"])
 
         if self._transform is not None:
