@@ -72,4 +72,3 @@ class Stream:
 if __name__ == "__main__":
     stream_ascii = Stream().load("Testfiles/ascii.stream")
     stream_bin = Stream().load("Testfiles/binary.stream")
-    
