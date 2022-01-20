@@ -51,7 +51,7 @@ class PyTorchDatasetWrapper(TorchDataset):
         # fetch a new batch if current batch is exhausted
         if (
             index % self._internal_cache_size == 0
-            or index % self._batch_cache_size == 0
+            or index % self._internal_cache_size >= self._batch_cache_size
         ):
             if self._output_dict:
                 batch = self._iter.get_next()
