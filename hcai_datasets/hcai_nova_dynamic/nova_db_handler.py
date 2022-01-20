@@ -97,6 +97,11 @@ class NovaDBHandler():
     Returns:
 
     """
+
+    if not schemes:
+      print('WARNING: No Schemes have been requested. Returning empty list.')
+      return []
+
     if not dataset in self.datasets:
       raise ValueError('{} not found in datasets'.format(dataset))
 
