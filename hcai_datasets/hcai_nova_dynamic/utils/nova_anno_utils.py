@@ -2,6 +2,7 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import hcai_datasets.hcai_nova_dynamic.utils.nova_types as nt
 import numpy as np
+import pandas as pd
 
 from abc import ABC, abstractmethod
 from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import merge_role_key, split_role_key
@@ -108,11 +109,106 @@ class ContinousAnnotation(Annotation):
 
 
 class FreeAnnotation(Annotation):
-
+    '''
+    Then FREE annotation scheme is used for any form of free text.
+    '''
     def __init__(self, **kwargs):
         self.type = nt.AnnoTypes.FREE
         super().__init__(**kwargs)
 
+    def get_tf_info(self):
+        return (merge_role_key(self.role, self.scheme), tfds.features.Sequence(tfds.features.Text()))
+
+    def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
+        self.data = mongo_doc
+        if time_to_ms:
+            for d in self.data:
+                d['from'] = int(d['from'] * 1000)
+                d['to'] = int(d['to'] * 1000)
+        self.dataframe = pd.DataFrame(self.data)
+
+        # Creating interval index for annotations
+        self.dataframe .set_index(pd.IntervalIndex(self.dataframe ['from'].combine(self.dataframe ['to'], lambda x, y: pd.Interval(x, y, closed='both'))), inplace=True)
+
+    def get_label_for_frame_default(self, start, end):
+
+        # If we don't have any data we return the garbage label
+        if self.data == -1:
+            return -1
+
+        else:
+            # Finding all annos that overlap with the frame
+            def is_overlapping(af, at, ff, ft):
+
+                # anno is larger than frame
+                altf = af <= ff and at >= ft
+
+                # anno overlaps frame start
+                aofs = at >= ff and at <= ft
+
+                # anno overlaps frame end
+                aofe = af >= ff and af <= ft
+
+                return altf or aofs or aofe
+
+            annos_for_sample = list(filter(lambda x: is_overlapping(x['from'], x['to'], start, end), self.data))
+
+            # No label matches
+            if not annos_for_sample:
+                return ['']
+
+            # It's probably not necessary for free annotations to only return the maximum label
+            #majority_sample_idx = np.argmax(
+                #list(map(lambda x: min(end, x['to']) - max(start, x['from']), annos_for_sample)))
+
+            return [a['name'] for a in annos_for_sample]
+
+    def get_label_for_frame_pd(self, start, end):
+
+        # Convert annos to pandas dataframe
+        #df = pd.DataFrame(self.data)
+
+        # Create helper interval frame
+        frame = pd.Interval(start, end, closed='both')
+
+        # Creating interval index for annotations
+        #df.set_index(pd.IntervalIndex(df['from'].combine(df['to'], lambda x, y: pd.Interval(x, y, closed='both'))), inplace=True)
+
+        # Get all overlapping windows for frame
+        df_ol = self.dataframe[self.dataframe.index.overlaps(frame)]
+
+        # Sort
+        try:
+            df_ol['overlap'] = df_ol['from'].combine(df_ol['to'], lambda f, t: max(0, min(t, end) - max(f, start)))
+        except:
+            exit()
+        df_ol = df_ol.sort_values(by='overlap', ascending=False)
+        return df_ol.iloc[0]['name']
+
+    def get_label_for_frame_alternative(self, start, end):
+
+        # If we don't have any data we return the garbage label
+        if self.data == -1:
+            return -1
+
+        else:
+            def get_overlap(a, b):
+                return max(0, min(a[1], b[1]) - max(a[0], b[0]))
+
+            # Get index of sample with highest overlap
+            overlap = sorted(self.data, key=lambda x: get_overlap((x['from'], x['to']), (start, end)))
+
+            # No label matches
+            if overlap[0] == 0:
+                return ''
+
+            return self.data[0]['name']
+
+
+    def get_label_for_frame(self, start, end):
+        #return self.get_label_for_frame_pd(start, end)
+        #return self.get_label_for_frame_alternative(start, end)
+        return self.get_label_for_frame_default(start, end)
 
 class DiscretePolygonAnnotation(Annotation):
 

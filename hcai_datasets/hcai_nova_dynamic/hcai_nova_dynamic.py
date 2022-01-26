@@ -181,6 +181,9 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                     label_info[label_id] = nau.DiscretePolygonAnnotation(role=role, scheme=scheme_name,
                                                                          is_valid=scheme_valid, labels=labels, sr=sr)
 
+                elif scheme_type == nt.AnnoTypes.FREE:
+                    label_info[label_id] = nau.FreeAnnotation(role=role, scheme=scheme_name, is_valid=scheme_valid)
+
                 else:
                     raise ValueError('Invalid label type {}'.format(scheme['type']))
 
@@ -254,7 +257,10 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                 self._open_data_reader_for_session(session)
 
                 session_info = self.nova_db_handler.get_session_info(self.dataset, session)[0]
-                dur = int(min(*[v.dur for k,v in self.data_info.items()], session_info['duration'] ))
+                dur = session_info['duration']
+                # If are loading any datastreams we check if any datastream is shorter than the duration stored in the database suggests
+                if self.data_info:
+                    dur = int(min(*[v.dur for k,v in self.data_info.items()], dur ))
 
                 if not dur:
                     raise ValueError('Session {} has no duration.'.format(session))

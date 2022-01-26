@@ -144,6 +144,10 @@ class NovaDBHandler():
     if not dataset in self.datasets:
       raise ValueError('{} not found in datasets'.format(dataset))
 
+    if not data_streams:
+      print('WARNING: No Datastreams have been requested. Returning empty list.')
+      return []
+
     mongo_streams = []
     for stream in data_streams:
       mongo_stream = self.get_docs_by_prop(stream, 'name', dataset, STREAM_COLLECTION)
@@ -153,7 +157,7 @@ class NovaDBHandler():
         mongo_streams.append(mongo_stream[0])
 
     if not mongo_streams:
-      raise ValueError('no entries with scheme {} found'.format(data_streams))
+      raise ValueError('no entries for datastream {} found'.format(data_streams))
 
     return mongo_streams
 
@@ -242,6 +246,7 @@ class NovaDBHandler():
 
     # getting the annotation data and the session name
     if not mongo_annos:
+      print(f'No annotions found for \n\t-annotator: {annotator}\n\t-scheme: {scheme}\n\t-session: {session}\n\t-role: {roles}')
       return -1
 
     else:
