@@ -147,9 +147,7 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
             supervised_keys= self.supervised_keys,
             homepage='https://github.com/hcmlab/nova',
             citation=_CITATION,
-            # TODO: This option is currently disabled because it raises an error with tfds 4.3.0
-            # Code should be updated once a newer version is released
-            #disable_shuffling=True
+            disable_shuffling=True
         )
 
     def _populate_label_info_from_mongo_doc(self, mongo_schemes):
@@ -299,13 +297,14 @@ class HcaiNovaDynamic(tfds.core.GeneratorBasedBuilder):
                             sample_dict_for_role = dict(map(lambda elem: (elem[0].replace(role + '.', ''), elem[1]), sample_dict_for_role.items()))
 
                             sample_dict_for_role['frame'] = str(sample_counter) + '_' + key + '_' + role
-                            yield key + '_' + role, sample_dict_for_role
+                            #yield key + '_' + role, sample_dict_for_role
+                            yield sample_counter, sample_dict_for_role
                             sample_counter += 1
                         c_pos_ms += self.stride_ms
 
                     else:
                         sample_dict['frame'] = str(sample_counter) + '_' + key
-                        yield key, sample_dict
+                        yield sample_counter, sample_dict
                         c_pos_ms += self.stride_ms
                         sample_counter += 1
 

@@ -1,121 +1,99 @@
 """hcai_faces dataset."""
 
-import os
-
 import tensorflow as tf
 import tensorflow_datasets as tfds
+import pandas as pd
+from tensorflow_datasets.core.splits import Split
+from pathlib import Path
+from hcai_dataset_utils.statistics import Statistics
 
-# TODO(hcai_faces): Markdown description  that will appear on the catalog page.
+
 _DESCRIPTION = """
-Description is **formatted** as markdown.
-
-It should also contain any processing which has been applied (if any),
-(e.g. corrupted example skipped, images cropped,...):
+FACES is a set of images of naturalistic faces of 171 young (n = 58), middle-aged (n = 56), and older (n = 57) women and 
+men displaying each of six facial expressions: neutrality, sadness, disgust, fear, anger, and happiness. 
+The FACES database was developed between 2005 and 2007 by Natalie C. Ebner, Michaela Riediger, 
+and Ulman Lindenberger at the Center for Lifespan Psychology, Max Planck Institute for Human Development, Berlin, Germany.
 """
 
-# TODO(hcai_faces): BibTeX citation
 _CITATION = """
+@article{ebner2010faces,
+  title={FACES—A database of facial expressions in young, middle-aged, and older women and men: Development and validation},
+  author={Ebner, Natalie C and Riediger, Michaela and Lindenberger, Ulman},
+  journal={Behavior research methods},
+  volume={42},
+  number={1},
+  pages={351--362},
+  year={2010},
+  publisher={Springer}
+}
 """
 
 
-class HcaiFaces(tfds.core.GeneratorBasedBuilder):
-  """DatasetBuilder for hcai_faces dataset."""
+class HcaiFaces(tfds.core.GeneratorBasedBuilder, Statistics):
+    """DatasetBuilder for hcai_faces dataset."""
 
-  VERSION = tfds.core.Version('1.0.0')
-  RELEASE_NOTES = {
-    '1.0.0': 'Initial release.',
-  }
-
-  def __init__(self, *, dataset_dir=None, **kwargs):
-    super(HcaiFaces, self).__init__(**kwargs)
-    self.dataset_dir = os.path.join(dataset_dir, 'bilder')
-
-  def _info(self) -> tfds.core.DatasetInfo:
-    """Returns the dataset metadata."""
-    return tfds.core.DatasetInfo(
-      builder=self,
-      description=_DESCRIPTION,
-      features=tfds.features.FeaturesDict({
-        # These are the features of your dataset like images, labels ...
-        'image': tfds.features.Image(shape=(None, None, 3)),
-        'id': tf.int64,
-        'age': tfds.features.ClassLabel(names=['y', 'o', 'm']),
-        'gender': tfds.features.ClassLabel(names=['m', 'f']),
-        'emotion': tfds.features.ClassLabel(names=['a', 'd', 'f', 'h', 'n', 's']),
-        'set': tfds.features.ClassLabel(names=['a', 'b']),
-      }),
-      # If there's a common (input, target) tuple from the
-      # features, specify them here. They'll be used if
-      # `as_supervised=True` in `builder.as_dataset`.
-      supervised_keys=('image', 'emotion'),  # Set to `None` to disable
-      homepage='https://dataset-homepage/',
-      citation=_CITATION,
-    )
-
-  def _standard_splits(self):
-    """Returns the standard splits for the dataset.
-    Since faces has no predefined splits the function applies a 70-15-15 split ratio to create them.
-    Splits are sorted by filename and contain unique subjects and equal gender distribution."""
-
-    f_names = os.listdir(self.dataset_dir)
-    f_names_unique = []
-
-    for f in f_names:
-      if f.endswith('jpg'):
-        f_names_unique.append((f.split('_')[1], f.split('_')[0]))
-
-    f_names_unique = set(f_names_unique)
-
-    # sorting unique subject ids into age categories
-    old = sorted([x[1] for x in f_names_unique if x[0] == 'o'])
-    middle = sorted([x[1] for x in f_names_unique if x[0] == 'm'])
-    young = sorted([x[1] for x in f_names_unique if x[0] == 'y'])
-
-    # building splits using 70,15,15 % distribution evenly over all age groups
-    f = 0
-    t = 0.7
-    train_ids = old[int(len(old) * f): int(len(old) * t)] + \
-                middle[int(len(middle) * f): int(len(middle) * t)] + \
-                young[int(len(young) * f): int(len(young) * t)]
-    f = 0.7
-    t = 0.85
-    val_ids = old[int(len(old) * f): int(len(old) * t)] + \
-              middle[int(len(middle) * f): int(len(middle) * t)] + \
-              young[int(len(young) * f): int(len(young) * t)]
-    f = 0.85
-    t = 1
-    test_ids = old[int(len(old) * f): int(len(old) * t)] + \
-               middle[int(len(middle) * f): int(len(middle) * t)] + \
-               young[int(len(young) * f): int(len(young) * t)]
-
-    # getting filenames for each split
-    train = [f for x in train_ids for f in f_names if f.startswith(x)]
-    val = [f for x in val_ids for f in f_names if f.startswith(x)]
-    test = [f for x in test_ids for f in f_names if f.startswith(x)]
-
-    return train, val, test
-
-  def _split_generators(self, dl_manager: tfds.download.DownloadManager):
-    """Returns SplitGenerators."""
-    train, val, test = self._standard_splits()
-    return {
-      'train': self._generate_examples(train),
-      'val': self._generate_examples(val),
-      'test': self._generate_examples(test),
+    VERSION = tfds.core.Version("1.0.0")
+    RELEASE_NOTES = {
+        "1.0.0": "Initial release.",
     }
 
-  def _generate_examples(self, files):
-    """Yields examples."""
-    for f in files:
-      # names are composed as the following:
-      # "ID_ageGroup_gender_emotion_pictureSet.jpg
-      id, age, gender, emotion, set = os.path.splitext(f)[0].split('_')
+    def __init__(self, *, dataset_dir=None, **kwargs):
+        super(HcaiFaces, self).__init__(**kwargs)
+        self.dataset_dir = Path(dataset_dir) / "bilder"
 
-      yield f, {
-        'image': os.path.join(self.dataset_dir, f),
-        'id': int(id),
-        'age': age,
-        'gender': gender,
-        'emotion': emotion,
-        'set': set
-      }
+    def _info(self) -> tfds.core.DatasetInfo:
+        """Returns the dataset metadata."""
+        return tfds.core.DatasetInfo(
+            builder=self,
+            description=_DESCRIPTION,
+            metadata=tfds.core.MetadataDict({}),
+            features=tfds.features.FeaturesDict(
+                {
+                    # These are the features of your dataset like images, labels ...
+                    "image": tfds.features.Image(shape=(3543, 2835, 3)),
+                    "id": tf.int64,
+                    "age": tfds.features.ClassLabel(names=["y", "o", "m"]),
+                    "gender": tfds.features.ClassLabel(names=["m", "f"]),
+                    "emotion": tfds.features.ClassLabel(
+                        names=["a", "d", "f", "h", "n", "s"]
+                    ),
+                    "set": tfds.features.ClassLabel(names=["a", "b"]),
+                    "rel_file_path": tf.string,
+                }
+            ),
+            supervised_keys=("image", "emotion"),
+            homepage="https://dataset-homepage/",
+            citation=_CITATION,
+        )
+
+    def _populate_meta_data(self, data):
+        df = pd.DataFrame(data, columns=["id", "age", "gender", "emotion", "set"])
+        self._populate_stats(df)
+
+    def _split_generators(self, dl_manager: tfds.download.DownloadManager):
+        """Returns SplitGenerators."""
+        f_names = list(self.dataset_dir.glob("*.jpg"))
+        parsed = [n.stem.split("_") for n in f_names]
+        self._populate_meta_data(parsed)
+
+        return {
+            Split.TRAIN: self._generate_examples(zip(f_names, parsed)),
+        }
+
+    def _generate_examples(self, files):
+        """Yields examples.
+        # Labels are parese using filenames:
+        # "ID_ageGroup_gender_emotion_pictureSet.jpg"""
+        for f, p in files:
+
+            id, age, gender, emotion, set = p
+
+            yield str(f), {
+                "image": f,
+                "id": int(id),
+                "age": age,
+                "gender": gender,
+                "emotion": emotion,
+                "set": set,
+                "rel_file_path": str(f.relative_to(f.parents[1])),
+            }

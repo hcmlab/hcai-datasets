@@ -243,7 +243,7 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
         except ValueError:
             raise ValueError('Invalid input format for frame: {}'.format(frame))
     # if type is int we assume the input will be milliseconds
-    elif isinstance(frame, int):
+    elif isinstance(frame, int) or (isinstance(frame, str) and frame.isdigit()):
         try:
             print('WARNING: Automatically inferred type for frame {} is int.'.format(frame))
             return int(frame)
