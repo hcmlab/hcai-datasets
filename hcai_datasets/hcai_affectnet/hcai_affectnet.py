@@ -45,6 +45,7 @@ class HcaiAffectnetConfig(tfds.core.BuilderConfig):
         *,
         include_auto=False,
         ignore_duplicate=True,
+        ignore_broken=True,
         ignore_unsupported_format=True,
         ignore_lists=None,
         **kwargs
@@ -52,6 +53,7 @@ class HcaiAffectnetConfig(tfds.core.BuilderConfig):
         """BuilderConfig for HcaiAffectnetConfig.
         Args:
           ignore_duplicate: bool. Flag to determine whether the duplicated files in the dataset should be included. Only affects the training set.
+          ignore_broken: bool. Flag to determine whether the broken files in the dataset should be included.Affects all sets.
           ignore_wrong_format:  bool. Flag to determine whether files that are not in tensorflow compatible encoding should be ignored. Affects all sets.
           ignore_lists: list. Custom ignore lists for additional configurations.
           include_auto: bool. Flag to determine whether the automatically annotated files should be included in the dataset.
@@ -63,6 +65,9 @@ class HcaiAffectnetConfig(tfds.core.BuilderConfig):
 
         if ignore_duplicate:
             ignore_lists.append("affect_net_ignore_list_duplicates.json")
+
+        if ignore_broken:
+            ignore_lists.append("affect_net_broken_files_ignore_list.json")
 
         if ignore_unsupported_format:
             ignore_lists.append("affect_net_ignore_list_wrong_format.json")
