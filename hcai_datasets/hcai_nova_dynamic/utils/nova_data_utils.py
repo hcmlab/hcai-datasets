@@ -1,4 +1,6 @@
 import cv2
+from decord import VideoReader
+from decord import cpu
 import numpy as np
 import os
 import tensorflow_datasets as tfds
@@ -126,46 +128,31 @@ class VideoData(Data):
         return merge_role_key(self.role, self.name), feature_connector
 
     def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
-        start_frame = frame_start_ms / 1000 * self.sr
-        end_frame = frame_end_ms / 1000 * self.sr
-        length = int(end_frame - start_frame)
-
-        self.file_reader.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-        chunk = np.zeros((length, ) + self.sample_data_shape, dtype=np.uint8)
-
-        for i in range(length):
-            ret, frame = self.file_reader.read()
-
-            if not ret:
-                raise IndexError('Video frame {} out of range'.format(i))
-
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            chunk[i] = frame
-
+        start_frame = int(frame_start_ms / 1000 * self.sr)
+        end_frame = int(frame_end_ms / 1000 * self.sr)
+        chunk = self.file_reader.get_batch(list(range(start_frame, end_frame))).asnumpy()
         return chunk
+
 
     def open_file_reader_hook(self, path: str):
         if not os.path.isfile(path):
             print('Session file not found at {}.'.format(path))
             raise FileNotFoundError()
-        self.file_reader = cv2.VideoCapture(path)
-        fps = self.file_reader.get(cv2.CAP_PROP_FPS)  # OpenCV2 version 2 used "CV_CAP_PROP_FPS"
-        frame_count = int(self.file_reader.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.file_reader = VideoReader(path, ctx=cpu(0))
+        fps = self.file_reader.get_avg_fps()
+        frame_count = len(self.file_reader)
         self.dur = frame_count / fps
 
     def populate_meta_info(self, path: str):
         if not os.path.isfile(path):
             print('Sample file not found at {}. Can\'t load metadata.'.format(path))
             raise FileNotFoundError()
-        file_reader = cv2.VideoCapture(path)
-        width = int(file_reader.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(file_reader.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        depth = 3
-        self.sample_data_shape = (height, width, depth)
+        file_reader = VideoReader(path)
+        self.sample_data_shape = file_reader[0].shape
         self.meta_loaded = True
 
     def close_file_reader(self):
-        return self.file_reader.release()
+        return True
 
 
 class StreamData(Data):
