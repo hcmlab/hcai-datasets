@@ -24,13 +24,13 @@ ds, ds_info = tfds.load(
         "db_config_path": "C:\\Users\\valentin\\PycharmProjects\\hcai_datasets\\local\\nova_db.cfg",
         "db_config_dict": None,
         # Dataset Config
-        "dataset": "kassel_therapie_korpus",
+        "dataset": "affectnet",
         "nova_data_dir": os.path.join("Z:\\Korpora\\nova\\data"),
-        "sessions": ["OPD_101_No"],
-        "roles": ["patient", "therapist"],
-        "schemes": [],  # ["transcript"],
+        "sessions": ["1_man_eval"],
+        "roles": ["session"],
+        "schemes": [],  # [""],
         "annotator": "system",
-        "data_streams": ["video_resized"],
+        "data_streams": ["video"],
         # Sample Config
         "frame_size": 0.04,
         "left_context": 0,
