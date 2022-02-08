@@ -38,7 +38,7 @@ class NovaDBHandler():
       print('WARNING! No valid nova database config found for path {} and dict {} \n Found config parameters are ip:{}, port{}, user: {}. Also check your password.'.format(db_config_path, db_config_dict, self.ip, self.port, self.user))
 
     self.client = MongoClient(host=self.ip, port=self.port, username=self.user, password=self.password)
-    self.datasets = self.client.list_database_names()
+    #self.datasets = self.client.list_database_names()
 
   def print_config(self, cfg, cfg_path):
     print('Loaded config from {}:'.format(cfg_path))
@@ -102,8 +102,8 @@ class NovaDBHandler():
       print('WARNING: No Schemes have been requested. Returning empty list.')
       return []
 
-    if not dataset in self.datasets:
-      raise ValueError('{} not found in datasets'.format(dataset))
+    #if not dataset in self.datasets:
+    # raise ValueError('{} not found in datasets'.format(dataset))
 
     mongo_schemes = []
     for scheme in schemes:
@@ -141,8 +141,8 @@ class NovaDBHandler():
       role_list:
       data_stream_list:
     """
-    if not dataset in self.datasets:
-      raise ValueError('{} not found in datasets'.format(dataset))
+    #if not dataset in self.datasets:
+    #  raise ValueError('{} not found in datasets'.format(dataset))
 
     if not data_streams:
       print('WARNING: No Datastreams have been requested. Returning empty list.')
@@ -222,8 +222,8 @@ class NovaDBHandler():
     Returns:
 
     """
-    if not dataset in self.datasets:
-      print('{} not found in datasets'.format(dataset))
+    #if not dataset in self.datasets:
+    #  print('{} not found in datasets'.format(dataset))
 
     mongo_schemes = self.get_docs_by_prop(scheme, 'name', dataset, SCHEME_COLLECTION)
     if not mongo_schemes:
