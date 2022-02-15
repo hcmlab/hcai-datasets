@@ -59,7 +59,9 @@ setup(
     install_requires=[
         "pymongo",
         "opencv-python",
-        "tensorflow>=2.1",
+        "tensorflow>=2.7;platform_system=='windows'",
+        "tensorflow>=2.7;platform_system=='linux'",
+        "tensorflow-macos>=2.7;platform_system=='darwin'",
         "tensorflow-datasets",
     ],
 )

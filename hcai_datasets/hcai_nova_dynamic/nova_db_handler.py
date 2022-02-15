@@ -207,7 +207,7 @@ class NovaDBHandler():
 
   def get_annos(self, dataset, scheme, session, annotator, roles):
     """
-    Fetches all annotations that matche the specified criteria from the nova database and returns them as a python readable dictionary.
+    Fetches all annotations that match the specified criteria from the nova database and returns them as a python readable dictionary.
     Args:
       ip:
       port:
