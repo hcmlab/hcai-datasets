@@ -297,6 +297,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     for k, v in self.label_info.items()
                 ]
                 data_for_frame = []
+
+                # TODO find root cause of empty_sample and fix
                 empty_sample = False
                 for k, v in self.data_info.items():
                     sample = v.get_sample(frame_start_ms, frame_end_ms)
