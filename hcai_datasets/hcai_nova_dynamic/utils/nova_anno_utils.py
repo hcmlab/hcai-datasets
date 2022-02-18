@@ -88,6 +88,7 @@ class DiscreteAnnotation(Annotation):
 
     def __init__(self, labels={}, add_rest_class=False, **kwargs):
         super().__init__(**kwargs)
+        self.dataframe = None
         self.type = nt.AnnoTypes.DISCRETE
         self.labels = {
             x["id"]: x["name"] if x["isValid"] else ""
@@ -113,10 +114,15 @@ class DiscreteAnnotation(Annotation):
         # Creating Pandas Dataframe version of annotations
         self.dataframe = pd.DataFrame(self.data)
 
-        # Creating numpy array of annotations for fast access
-        # Splitting the annotations into interval and data array
-        self.data_interval = self.dataframe[["from", "to"]].values.astype(np.int)
-        self.data_values = self.dataframe[["id", "conf"]].values
+        # Create
+        if self.dataframe.empty:
+            self.data_interval = np.empty((0, 2), int)
+            self.data_values = np.empty((0, 2), int)
+        else:
+            # Creating numpy array of annotations for fast access
+            # Splitting the annotations into interval and data array
+            self.data_interval = self.dataframe[["from", "to"]].values.astype(np.int)
+            self.data_values = self.dataframe[["name", "conf"]].values
 
     def get_label_for_frame_legacy(self, start, end):
 
@@ -165,25 +171,18 @@ class DiscreteAnnotation(Annotation):
 
     def get_label_for_frame_np(self, start, end):
 
-        # If we don't have any data we return the garbage label
-        if self.data == -1:
-            return -1
+        overlap_idxs = _get_overlap(self.data_interval, start, end)
 
-        else:
-            overlap_idxs = _get_overlap(self.data_interval, start, end)
+        # No label matches
+        if not overlap_idxs.any():
+            if self.add_rest_class:
+                return len(self.labels.values()) - 1
+            else:
+                return -1
 
-            # No label matches
-            if not overlap_idxs.any():
-                if self.add_rest_class:
-                    return len(self.labels.values()) - 1
-                else:
-                    return -1
+        majority_idx = _get_anno_majority(self.data_interval, overlap_idxs, start, end)
 
-            majority_idx = _get_anno_majority(
-                self.data_interval, overlap_idxs, start, end
-            )
-
-            return self.data_values[majority_idx, 0]
+        return self.data_values[majority_idx, 0]
 
     def get_label_for_frame(self, start, end):
         return self.get_label_for_frame_np(start, end)
@@ -195,6 +194,7 @@ class FreeAnnotation(Annotation):
     """
 
     def __init__(self, **kwargs):
+        self.dataframe = None
         self.type = nt.AnnoTypes.FREE
         super().__init__(**kwargs)
 
@@ -214,10 +214,15 @@ class FreeAnnotation(Annotation):
         # Creating Pandas Dataframe version of annotations
         self.dataframe = pd.DataFrame(self.data)
 
-        # Creating numpy array of annotations for fast access
-        # Splitting the annotations into interval and data array
-        self.data_interval = self.dataframe[["from", "to"]].values.astype(np.int)
-        self.data_values = self.dataframe[["name", "conf"]].values
+        # Create
+        if self.dataframe.empty:
+            self.data_interval = np.empty((0, 2), int)
+            self.data_values = np.empty((0, 2), int)
+        else:
+            # Creating numpy array of annotations for fast access
+            # Splitting the annotations into interval and data array
+            self.data_interval = self.dataframe[["from", "to"]].values.astype(np.int)
+            self.data_values = self.dataframe[["name", "conf"]].values
 
     def get_label_for_frame_legacy(self, start, end):
 
@@ -253,19 +258,13 @@ class FreeAnnotation(Annotation):
             return [a["name"] for a in annos_for_sample]
 
     def get_label_for_frame_np(self, start, end):
+        annos_for_sample = _get_overlap(self.data_interval, start, end)
 
-        # If we don't have any data we return the garbage label
-        if self.data == -1:
-            return -1
+        # No label matches
+        if not annos_for_sample.any():
+            return [""]
 
-        else:
-            annos_for_sample = _get_overlap(self.data_interval, start, end)
-
-            # No label matches
-            if not annos_for_sample.any():
-                return [""]
-
-            return self.data_values[annos_for_sample, 0]
+        return self.data_values[annos_for_sample, 0]
 
     def get_label_for_frame(self, start, end):
         return self.get_label_for_frame_np(start, end)

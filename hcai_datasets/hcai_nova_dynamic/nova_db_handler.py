@@ -207,7 +207,7 @@ class NovaDBHandler():
 
   def get_annos(self, dataset, scheme, session, annotator, roles):
     """
-    Fetches all annotations that matche the specified criteria from the nova database and returns them as a python readable dictionary.
+    Fetches all annotations that matche the specified criteria from the nova database and returns them as a list of python readable dictionaries.
     Args:
       ip:
       port:
@@ -248,9 +248,10 @@ class NovaDBHandler():
     # getting the annotation data and the session name
     if not mongo_annos:
       print(f'No annotions found for \n\t-annotator: {annotator}\n\t-scheme: {scheme}\n\t-session: {session}\n\t-role: {roles}')
-      return -1
+      return []
 
     else:
+      #TODO: adapt for multiple roles, annotators etc.
       label = self.get_docs_by_prop(mongo_annos[0]['data_id'], '_id', dataset, ANNOTATION_DATA_COLLECTION)
       label = label[0]['labels']
 
