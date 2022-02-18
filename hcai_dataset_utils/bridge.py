@@ -4,35 +4,39 @@ from torch.utils.data.dataset import T_co, IterableDataset
 
 import tensorflow as tf
 
-from hcai_dataset_utils.generic_dataset import GenericDataset
+from hcai_dataset_utils.dataset_iterable import DatasetIterable
 
 
 class BridgePyTorch(IterableDataset):
-    def __init__(self, ds_generic: GenericDataset):
+    def __init__(self, ds_generic: DatasetIterable):
         self._ds = ds_generic
+        self._transforms = {}
+        self._global_transform = None
 
     def __iter__(self) -> Iterator[T_co]:
-        return self._ds.__iter__()
+        return self
+
+    def __next__(self):
+        data = self._ds.__next__()
+        for field in self._transforms.keys():
+            data[field] = self._transforms[field](data[field])
+        if self._global_transform is not None:
+            data = self._global_transform(data)
+        return data
 
     def __getitem__(self, index) -> T_co:
         return self._ds.__getitem__(index)
 
+    def apply_global_transform(self, transform):
+        self._global_transform = transform
 
-class BridgeKeras(tf.keras.utils.Sequence):
-    def __init__(self, ds_generic: GenericDataset):
+    def apply_transform(self, field_index, transform):
+        self._transforms[field_index] = transform
+
+
+class BridgeKeras():
+    def __init__(self, ds_generic: DatasetIterable):
         self._ds = ds_generic
 
-    def __len__(self):
-        return len(self.indices) // self.batch_size
-
-    def __getitem__(self, index):
-        index = self.index[index * self.batch_size : (index + 1) * self.batch_size]
-        batch = [self.indices[k] for k in index]
-
-        X, y = self.__get_data(batch)
-        return X, y
-
-    def on_epoch_end(self):
-        self.index = np.arange(len(self.indices))
-        if self.shuffle == True:
-            np.random.shuffle(self.index)
+    def __call__(self, *args, **kwargs):
+        return self._ds.__iter__()

@@ -6,7 +6,7 @@ import sys
 import hcai_datasets.hcai_nova_dynamic.utils.nova_types as nt
 import hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils as ndu
 import hcai_datasets.hcai_nova_dynamic.utils.nova_anno_utils as nau
-from hcai_dataset_utils.generic_dataset import GenericDataset
+from hcai_dataset_utils.dataset_iterable import DatasetIterable
 
 from hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils import (
     AudioData,
@@ -23,30 +23,30 @@ from hcai_datasets.hcai_nova_dynamic.nova_db_handler import NovaDBHandler
 from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import *
 
 
-class HcaiNovaDynamicGeneric(GenericDataset):
+class HcaiNovaDynamicIterable(DatasetIterable):
     def __init__(
-        self,
-        *,
-        db_config_path=None,
-        db_config_dict=None,
-        dataset=None,
-        nova_data_dir=None,
-        sessions=None,
-        annotator=None,
-        schemes=None,
-        roles=None,
-        data_streams=None,
-        start=None,
-        end=None,
-        left_context="0",
-        right_context="0",
-        frame_size="1",
-        stride=None,
-        flatten_samples=False,
-        supervised_keys=None,
-        add_rest_class=True,
-        lazy_loading=False,
-        **kwargs
+            self,
+            *,
+            db_config_path=None,
+            db_config_dict=None,
+            dataset=None,
+            nova_data_dir=None,
+            sessions=None,
+            annotator=None,
+            schemes=None,
+            roles=None,
+            data_streams=None,
+            start=None,
+            end=None,
+            left_context="0",
+            right_context="0",
+            frame_size="1",
+            stride=None,
+            flatten_samples=False,
+            supervised_keys=None,
+            add_rest_class=True,
+            lazy_loading=False,
+            **kwargs
     ):
         """
         Initialize the HcaiNovaDynamic dataset builder
@@ -130,23 +130,7 @@ class HcaiNovaDynamicGeneric(GenericDataset):
 
         self.supervised_keys = tuple(supervised_keys) if supervised_keys else None
 
-    # TODO formulate alternative
-
-    # def _info(self) -> tfds.core.DatasetInfo:
-    #     """Returns the dataset metadata."""
-    #
-    #     def map_label_id(lid):
-    #         if self.flatten_samples and not lid == 'frame':
-    #             return split_role_key(lid)[-1]
-    #         return lid
-    #
-    #     features_dict = {
-    #                 # TODO: Remove frame when tfds implements option to disable shuffle
-    #                 # Adding fake framenumber label for sorting
-    #                 'frame': tf.string,
-    #                 **{map_label_id(k): v.get_tf_info()[1] for k,v in self.label_info.items()},
-    #                 **{map_label_id(k): v.get_tf_info()[1] for k, v in self.data_info.items()}
-    #             }
+        self._iterable = self._yield_sample()
 
     def _populate_label_info_from_mongo_doc(self, mongo_schemes):
         """
@@ -212,7 +196,7 @@ class HcaiNovaDynamicGeneric(GenericDataset):
         for data_stream in mongo_data_streams:
             for role in self.roles:
                 sample_stream_name = (
-                    role + "." + data_stream["name"] + "." + data_stream["fileExt"]
+                        role + "." + data_stream["name"] + "." + data_stream["fileExt"]
                 )
                 sample_data_path = os.path.join(
                     self.nova_data_dir,
@@ -266,13 +250,7 @@ class HcaiNovaDynamicGeneric(GenericDataset):
             )
             data.open_file_reader(data_path)
 
-    def __len__(self):
-        pass
-
-    def __getitem__(self, item):
-        pass
-
-    def __next__(self):
+    def _yield_sample(self):
         """Yields examples."""
 
         # Needed to sort the samples later and assure that the order is the same as in nova. Necessary for CML till the tfds can be returned in order.
@@ -302,26 +280,32 @@ class HcaiNovaDynamicGeneric(GenericDataset):
 
             # Generate samples for this session
             while c_pos_ms + self.stride_ms + self.right_context_ms <= min(
-                self.end_ms, dur_ms
+                    self.end_ms, dur_ms
             ):
                 frame_start_ms = c_pos_ms - self.left_context_ms
                 frame_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
                 key = (
-                    session
-                    + "_"
-                    + str(frame_start_ms / 1000)
-                    + "_"
-                    + str(frame_end_ms / 1000)
+                        session
+                        + "_"
+                        + str(frame_start_ms / 1000)
+                        + "_"
+                        + str(frame_end_ms / 1000)
                 )
 
                 labels_for_frame = [
                     {k: v.get_label_for_frame(frame_start_ms, frame_end_ms)}
                     for k, v in self.label_info.items()
                 ]
-                data_for_frame = [
-                    {k: v.get_sample(frame_start_ms, frame_end_ms)}
-                    for k, v in self.data_info.items()
-                ]
+                data_for_frame = []
+                empty_sample = False
+                for k, v in self.data_info.items():
+                    sample = v.get_sample(frame_start_ms, frame_end_ms)
+                    if sample.shape[0] != 1:
+                        empty_sample = True
+                    data_for_frame.append({k: sample})
+                if empty_sample:
+                    c_pos_ms += self.stride_ms
+                    continue
 
                 sample_dict = {}
 
@@ -335,7 +319,6 @@ class HcaiNovaDynamicGeneric(GenericDataset):
 
                     # grouping labels and data according to roles
                     for role in self.roles:
-
                         # filter dictionary to contain values for role
                         sample_dict_for_role = dict(
                             filter(lambda elem: role in elem[0], sample_dict.items())
@@ -350,19 +333,45 @@ class HcaiNovaDynamicGeneric(GenericDataset):
                         )
 
                         sample_dict_for_role["frame"] = (
-                            str(sample_counter) + "_" + key + "_" + role
+                                str(sample_counter) + "_" + key + "_" + role
                         )
                         # yield key + '_' + role, sample_dict_for_role
-                        yield sample_counter, sample_dict_for_role
+                        yield sample_dict_for_role
                         sample_counter += 1
                     c_pos_ms += self.stride_ms
 
                 else:
                     sample_dict["frame"] = str(sample_counter) + "_" + key
-                    yield sample_counter, sample_dict
+                    yield sample_dict
                     c_pos_ms += self.stride_ms
                     sample_counter += 1
 
             # closing file readers for this session
             for k, v in self.data_info.items():
                 v.close_file_reader()
+
+    def __iter__(self):
+        return self._iterable
+
+    def __next__(self):
+        return self._iterable.__next__()
+
+    def get_output_types(self):
+        def map_label_id(lid):
+            if self.flatten_samples and not lid == 'frame':
+                return split_role_key(lid)[-1]
+            return lid
+
+        return {
+                    # TODO: Remove frame when tfds implements option to disable shuffle
+                    # Adding fake framenumber label for sorting
+                    'frame': str,
+                    **{map_label_id(k): v.get_tf_info()[1] for k, v in self.label_info.items()},
+                    **{map_label_id(k): v.get_tf_info()[1] for k, v in self.data_info.items()}
+                }
+
+        # return {
+        #     "session.emotion_categorical": float,
+        #     "session.video": int,
+        #     "frame": str
+        # }
