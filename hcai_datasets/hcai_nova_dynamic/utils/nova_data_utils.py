@@ -48,6 +48,7 @@ class Data(ABC):
         # Set when populate_meta_info is called
         self.sample_data_shape = None
         self.tf_data_type = None
+        self.np_data_type = None
         self.meta_loaded = False
 
         # Set when open_file_reader is called
@@ -66,6 +67,17 @@ class Data(ABC):
                 )
             )
             raise RuntimeError("Datastream not loaded")
+
+    def get_info(self):
+        if self.meta_loaded:
+            return self.get_info_hook()
+        else:
+            print(
+                "Meta data has not been loaded for file {}. Call get_meta_info() first.".format(
+                    merge_role_key(self.role, self.name)
+                )
+            )
+
 
     def get_tf_info(self):
         if self.meta_loaded:
@@ -107,6 +119,13 @@ class Data(ABC):
         ...
 
     @abstractmethod
+    def get_info_hook(self):
+        """
+        Returns the features for this datastream to create the DatasetInfo for tensorflow
+        """
+        ...
+
+    @abstractmethod
     def get_sample_hook(self, start_frame: int, end_frame: int):
         """
         Returns a data chunk from start frame to end frame
@@ -142,6 +161,12 @@ class AudioData(Data):
     def get_tf_info_hook(self) -> (str, tfds.features.Sequence):
         feature_connector = tfds.features.Audio()
         return merge_role_key(self.role, self.name), feature_connector
+
+    def get_info_hook(self):
+        return merge_role_key(self.role, self.name), {
+            "shape": (None, 1),
+            "dtype": np.uint8
+        }
 
     def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
         start_frame = frame_start_ms / 1000 * self.sr
@@ -198,6 +223,12 @@ class VideoData(Data):
         )
         return merge_role_key(self.role, self.name), feature_connector
 
+    def get_info_hook(self):
+        return merge_role_key(self.role, self.name), {
+            "shape": self.sample_data_shape,
+            "dtype": np.float32
+        }
+
     def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
         start_frame = int(frame_start_ms / 1000 * self.sr)
         end_frame = int(frame_end_ms / 1000 * self.sr)
@@ -237,6 +268,13 @@ class StreamData(Data):
         )
         return merge_role_key(self.role, self.name), feature_connector
 
+
+    def get_info_hook(self):
+        return merge_role_key(self.role, self.name), {
+            "shape": self.sample_data_shape,
+            "dtype": self.np_data_type
+        }
+
     def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
         try:
             self.data_stream_opend()
@@ -267,6 +305,7 @@ class StreamData(Data):
         stream = Stream().load_header(path)
         self.sample_data_shape = (stream.dim,)
         self.tf_data_type = stream.tftype
+        self.np_data_type = stream.type
         self.meta_loaded = True
 
 

@@ -358,7 +358,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
     def __next__(self):
         return self._iterable.__next__()
 
-    def get_output_types(self):
+    def get_output_info(self):
+
         def map_label_id(lid):
             if self.flatten_samples and not lid == 'frame':
                 return split_role_key(lid)[-1]
@@ -367,13 +368,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         return {
                     # TODO: Remove frame when tfds implements option to disable shuffle
                     # Adding fake framenumber label for sorting
-                    'frame': str,
-                    **{map_label_id(k): v.get_tf_info()[1] for k, v in self.label_info.items()},
-                    **{map_label_id(k): v.get_tf_info()[1] for k, v in self.data_info.items()}
+                    'frame': {"dtype":np.str, "shape":(1,)},
+                    **{map_label_id(k): v.get_info()[1] for k, v in self.label_info.items()},
+                    **{map_label_id(k): v.get_info()[1] for k, v in self.data_info.items()}
                 }
 
-        # return {
-        #     "session.emotion_categorical": float,
-        #     "session.video": int,
-        #     "frame": str
-        # }

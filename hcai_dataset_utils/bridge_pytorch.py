@@ -33,10 +33,3 @@ class BridgePyTorch(IterableDataset):
     def apply_transform(self, field_index, transform):
         self._transforms[field_index] = transform
 
-
-class BridgeKeras():
-    def __init__(self, ds_generic: DatasetIterable):
-        self._ds = ds_generic
-
-    def __call__(self, *args, **kwargs):
-        return self._ds.__iter__()

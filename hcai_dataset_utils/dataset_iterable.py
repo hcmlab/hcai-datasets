@@ -12,5 +12,5 @@ class DatasetIterable(ABC):
     def __next__(self):
         raise NotImplementedError()
 
-    def get_output_types(self):
+    def get_output_info(self):
         raise NotImplementedError()
