@@ -2,8 +2,6 @@ import cv2
 from decord import VideoReader, cpu
 import numpy as np
 import os
-import tensorflow_datasets as tfds
-import tensorflow as tf
 
 # import librosa
 from hcai_datasets.hcai_nova_dynamic.utils import nova_types as nt
@@ -18,24 +16,16 @@ from abc import ABC, abstractmethod
 
 class Data(ABC):
 
-    lazy_connector = tfds.features.FeaturesDict(
-        {
-            "frame_start": tf.dtypes.float32,
-            "frame_end": tf.dtypes.float32,
-            "file_path": tfds.features.Text(),
-        }
-    )
-
     def __init__(
-        self,
-        role: str = "",
-        name: str = "",
-        file_ext: str = "stream",
-        sr: int = 0,
-        data_type: nt.DataTypes = None,
-        is_valid: bool = True,
-        sample_data_path: str = "",
-        lazy_loading: bool = False,
+            self,
+            role: str = "",
+            name: str = "",
+            file_ext: str = "stream",
+            sr: int = 0,
+            data_type: nt.DataTypes = None,
+            is_valid: bool = True,
+            sample_data_path: str = "",
+            lazy_loading: bool = False,
     ):
         self.role = role
         self.name = name
@@ -70,23 +60,13 @@ class Data(ABC):
 
     def get_info(self):
         if self.meta_loaded:
-            return self.get_info_hook()
-        else:
-            print(
-                "Meta data has not been loaded for file {}. Call get_meta_info() first.".format(
-                    merge_role_key(self.role, self.name)
-                )
-            )
-
-
-    def get_tf_info(self):
-        if self.meta_loaded:
             if self.lazy_loading:
-                feature_connector = self.lazy_connector
-                key = merge_role_key(self.role, self.name)
-                return (key, feature_connector)
-            else:
-                return self.get_tf_info_hook()
+                return {
+                    "frame_start": {"dtype": np.float32, "shape": (1)},
+                    "frame_end": {"dtype": np.float32, "shape": (1)},
+                    "file_path": {"dtype": np.str, "shape": (None,)}
+                }
+            return self.get_info_hook()
         else:
             print(
                 "Meta data has not been loaded for file {}. Call get_meta_info() first.".format(
@@ -110,13 +90,6 @@ class Data(ABC):
     def open_file_reader(self, path: str):
         self.file_path = path
         self.open_file_reader_hook(path)
-
-    @abstractmethod
-    def get_tf_info_hook(self):
-        """
-        Returns the features for this datastream to create the DatasetInfo for tensorflow
-        """
-        ...
 
     @abstractmethod
     def get_info_hook(self):
@@ -157,10 +130,6 @@ class Data(ABC):
 class AudioData(Data):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-    def get_tf_info_hook(self) -> (str, tfds.features.Sequence):
-        feature_connector = tfds.features.Audio()
-        return merge_role_key(self.role, self.name), feature_connector
 
     def get_info_hook(self):
         return merge_role_key(self.role, self.name), {
@@ -217,12 +186,6 @@ class VideoData(Data):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def get_tf_info_hook(self) -> (str, tfds.features.Sequence):
-        feature_connector = tfds.features.Sequence(
-            tfds.features.Image(shape=self.sample_data_shape, dtype=np.uint8)
-        )
-        return merge_role_key(self.role, self.name), feature_connector
-
     def get_info_hook(self):
         return merge_role_key(self.role, self.name), {
             "shape": self.sample_data_shape,
@@ -261,13 +224,6 @@ class VideoData(Data):
 class StreamData(Data):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-    def get_tf_info_hook(self) -> (str, tfds.features.Sequence):
-        feature_connector = tfds.features.Sequence(
-            tfds.features.Tensor(shape=self.sample_data_shape, dtype=self.tf_data_type)
-        )
-        return merge_role_key(self.role, self.name), feature_connector
-
 
     def get_info_hook(self):
         return merge_role_key(self.role, self.name), {

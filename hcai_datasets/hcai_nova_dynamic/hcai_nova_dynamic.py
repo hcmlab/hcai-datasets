@@ -7,6 +7,9 @@ import tensorflow as tf
 from tensorflow_datasets.core import split_builder as split_builder_lib
 
 from hcai_datasets.hcai_nova_dynamic.hcai_nova_dynamic_iterable import HcaiNovaDynamicIterable
+import hcai_datasets.hcai_nova_dynamic.utils.nova_types as nt
+import hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils as ndu
+import hcai_datasets.hcai_nova_dynamic.utils.nova_anno_utils as nau
 
 from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import *
 
@@ -77,18 +80,18 @@ class HcaiNovaDynamic(HcaiNovaDynamicIterable, tfds.core.GeneratorBasedBuilder):
             return lid
 
         features_dict = {
-                    # TODO: Remove frame when tfds implements option to disable shuffle
-                    # Adding fake framenumber label for sorting
-                    'frame': tf.string,
-                    **{map_label_id(k): v.get_tf_info()[1] for k,v in self.label_info.items()},
-                    **{map_label_id(k): v.get_tf_info()[1] for k, v in self.data_info.items()}
-                }
+            # TODO: Remove frame when tfds implements option to disable shuffle
+            # Adding fake framenumber label for sorting
+            'frame': tf.string,
+            **{map_label_id(k): self._build_tfds_label_info(k, v) for k, v in self.label_info.items()},
+            **{map_label_id(k): self._build_tfds_data_info(k, v) for k, v in self.data_info.items()}
+        }
 
         return tfds.core.DatasetInfo(
             builder=self,
             description=_DESCRIPTION,
             features=tfds.features.FeaturesDict(features_dict),
-            supervised_keys= self.supervised_keys,
+            supervised_keys=self.supervised_keys,
             homepage='https://github.com/hcmlab/nova',
             citation=_CITATION,
             disable_shuffling=True
@@ -108,4 +111,48 @@ class HcaiNovaDynamic(HcaiNovaDynamicIterable, tfds.core.GeneratorBasedBuilder):
                 break
             sample_counter = sample_counter + 1
 
+    def _build_tfds_label_info(self, label_key, scheme):
 
+        scheme_type = self.label_schemes[label_key]
+
+        if scheme_type == nt.AnnoTypes.DISCRETE:
+            return tfds.features.ClassLabel(names=list(scheme.labels.values()))
+        elif scheme_type == nt.AnnoTypes.DISCRETE_POLYGON:
+            return tfds.features.FeaturesDict(
+                {
+                    str(l): tfds.features.Sequence(
+                        tfds.features.Tensor(shape=(2,), dtype=tf.float64)
+                    )
+                    for l in scheme.labels.keys()
+                }
+            )
+        elif scheme_type == nt.AnnoTypes.FREE:
+            return tfds.features.Sequence(tfds.features.Text())
+        else:
+            raise NotImplementedError(f"_build_tfds_label_info not implemented for {scheme_type}")
+
+    def _build_tfds_data_info(self, data_key, data):
+
+        if data.lazy_loading:
+            return tfds.features.FeaturesDict(
+                {
+                    "frame_start": tf.dtypes.float32,
+                    "frame_end": tf.dtypes.float32,
+                    "file_path": tfds.features.Text(),
+                }
+            )
+
+        scheme_type = self.data_schemes[data_key]
+
+        if scheme_type == nt.DataTypes.VIDEO:
+            return tfds.features.Sequence(
+                tfds.features.Image(shape=data.sample_data_shape, dtype=tf.uint8)
+            )
+        elif scheme_type == nt.DataTypes.AUDIO:
+            return tfds.features.Audio()
+        elif scheme_type == nt.DataTypes.FEATURE:
+            return tfds.features.Sequence(
+                tfds.features.Tensor(shape=data.sample_data_shape, dtype=data.tf_data_type)
+            )
+        else:
+            raise NotImplementedError(f"_build_tfds_data_info not implemented for {scheme_type}")

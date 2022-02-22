@@ -98,8 +98,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         mongo_data = self.nova_db_handler.get_data_streams(
             dataset=dataset, data_streams=data_streams
         )
-        self.label_info = self._populate_label_info_from_mongo_doc(mongo_schemes)
-        self.data_info = self._populate_data_info_from_mongo_doc(mongo_data)
+        self.label_info, self.label_schemes = self._populate_label_info_from_mongo_doc(mongo_schemes)
+        self.data_info, self.data_schemes = self._populate_data_info_from_mongo_doc(mongo_data)
 
         # setting supervised keys
         if supervised_keys and self.flatten_samples:
@@ -142,6 +142,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
         """
         label_info = {}
+        label_schemes = {}
 
         # List of all combinations from roles and schemes that occur in the retrieved data.
         for scheme in mongo_schemes:
@@ -150,6 +151,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 scheme_type = nt.string_to_enum(nt.AnnoTypes, scheme["type"])
                 scheme_name = scheme["name"]
                 scheme_valid = scheme["isValid"]
+                label_schemes[label_id] = scheme_type
 
                 if scheme_type == nt.AnnoTypes.DISCRETE:
                     labels = scheme["labels"]
@@ -180,7 +182,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 else:
                     raise ValueError("Invalid label type {}".format(scheme["type"]))
 
-        return label_info
+        return label_info, label_schemes
 
     def _populate_data_info_from_mongo_doc(self, mongo_data_streams):
         """
@@ -192,6 +194,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
         """
         data_info = {}
+        data_schemes = {}
 
         for data_stream in mongo_data_streams:
             for role in self.roles:
@@ -205,6 +208,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     sample_stream_name,
                 )
                 dtype = nt.string_to_enum(nt.DataTypes, data_stream["type"])
+
 
                 if dtype == nt.DataTypes.VIDEO:
                     data = VideoData(
@@ -233,8 +237,9 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
                 data_id = merge_role_key(role=role, key=data_stream["name"])
                 data_info[data_id] = data
+                data_schemes[data_id] = dtype
 
-        return data_info
+        return data_info, data_schemes
 
     def _load_annotation_for_session(self, session, time_to_ms=False):
         for label_id, anno in self.label_info.items():
