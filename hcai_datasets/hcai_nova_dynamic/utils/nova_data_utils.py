@@ -37,7 +37,6 @@ class Data(ABC):
 
         # Set when populate_meta_info is called
         self.sample_data_shape = None
-        self.tf_data_type = None
         self.np_data_type = None
         self.meta_loaded = False
 
@@ -260,7 +259,6 @@ class StreamData(Data):
     def populate_meta_info(self, path: str):
         stream = Stream().load_header(path)
         self.sample_data_shape = (stream.dim,)
-        self.tf_data_type = stream.tftype
         self.np_data_type = stream.type
         self.meta_loaded = True
 

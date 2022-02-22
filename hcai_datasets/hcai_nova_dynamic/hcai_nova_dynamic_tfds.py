@@ -1,4 +1,5 @@
 """hcai_nova_dynamic dataset."""
+from enum import Enum
 from typing import Any
 
 import shutil
@@ -6,6 +7,7 @@ import tensorflow_datasets as tfds
 import tensorflow as tf
 from tensorflow_datasets.core import split_builder as split_builder_lib
 
+from hcai_dataset_utils.bridge_tf import BridgeTensorflow
 from hcai_datasets.hcai_nova_dynamic.hcai_nova_dynamic_iterable import HcaiNovaDynamicIterable
 import hcai_datasets.hcai_nova_dynamic.utils.nova_types as nt
 import hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils as ndu
@@ -26,6 +28,19 @@ TODO: x
 # TODO(hcai_audioset): BibTeX citation
 _CITATION = """
 """
+
+class TFDataTypes(Enum):
+  UNDEF = 0
+  SHORT = tf.int16
+  USHORT = tf.uint16
+  INT = tf.int32
+  UINT = tf.uint32
+  LONG = tf.int64
+  ULONG = tf.uint64
+  FLOAT = tf.float32
+  DOUBLE = tf.float64
+  LDOUBLE = tf.float64
+  BOOL = tf.bool
 
 
 class HcaiNovaDynamic(HcaiNovaDynamicIterable, tfds.core.GeneratorBasedBuilder):
@@ -151,8 +166,11 @@ class HcaiNovaDynamic(HcaiNovaDynamicIterable, tfds.core.GeneratorBasedBuilder):
         elif scheme_type == nt.DataTypes.AUDIO:
             return tfds.features.Audio()
         elif scheme_type == nt.DataTypes.FEATURE:
+            data_type = data.data_type
+            if BridgeTensorflow.TYPE_MAPPING[data_type] is not None:
+                data_type = BridgeTensorflow.TYPE_MAPPING[data_type]
             return tfds.features.Sequence(
-                tfds.features.Tensor(shape=data.sample_data_shape, dtype=data.tf_data_type)
+                tfds.features.Tensor(shape=data.sample_data_shape, dtype=data_type)
             )
         else:
             raise NotImplementedError(f"_build_tfds_data_info not implemented for {scheme_type}")
