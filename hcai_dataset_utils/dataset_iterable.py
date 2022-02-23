@@ -4,7 +4,9 @@ from abc import ABC
 class DatasetIterable(ABC):
 
     def __init__(self, split: str):
-        self.split = str
+        if split not in ["test", "train", "val"]:
+            split = "train"
+        self.split = split
 
     def __iter__(self):
         raise NotImplementedError()
