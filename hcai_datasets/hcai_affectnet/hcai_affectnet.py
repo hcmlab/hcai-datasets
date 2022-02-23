@@ -176,4 +176,4 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, HcaiAffectnetIterable, Stat
 
     def _generate_examples(self, split_data):
         for sample in self._yield_examples(split_data):
-            return sample["index"], sample
+            yield sample["index"], sample
