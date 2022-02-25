@@ -8,6 +8,11 @@ from hcai_dataset_utils.dataset_iterable import DatasetIterable
 
 
 class BridgePyTorch(IterableDataset):
+    """
+    Takes a dataset iterable and pytorch transforms
+    can be fed directly to a pytorch DataLoader
+    """
+
     def __init__(self, ds_generic: DatasetIterable):
         self._ds = ds_generic
         self._transforms = {}

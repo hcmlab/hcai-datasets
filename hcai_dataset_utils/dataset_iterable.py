@@ -2,6 +2,9 @@ from abc import ABC
 
 
 class DatasetIterable(ABC):
+    """
+    Abstract superclass for iterable Datasets, which can be fed into the Bridge classes for tensorflow and pytorch
+    """
 
     def __init__(self, split: str):
         if split not in ["test", "train", "val"]:

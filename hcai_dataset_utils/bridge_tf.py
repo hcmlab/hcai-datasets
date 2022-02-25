@@ -5,7 +5,11 @@ from hcai_dataset_utils.dataset_iterable import DatasetIterable
 
 
 class BridgeTensorflow:
-    TYPE_MAPPING = { #TODO complete using docs
+    """
+    Provides a helper function to make a tf Dataset directly from a DatasetIterable
+    """
+
+    TYPE_MAPPING = {
         np.str: tf.string,
         np.int: tf.int32,
         np.int32: tf.int32,

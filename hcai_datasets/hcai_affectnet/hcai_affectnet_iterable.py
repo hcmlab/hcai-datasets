@@ -23,7 +23,7 @@ class HcaiAffectnetIterable(DatasetIterable):
             ignore_lists=None,
             **kwargs
     ):
-        """BuilderConfig for HcaiAffectnetConfig.
+        """
         Args:
           ignore_duplicate: bool. Flag to determine whether the duplicated files in the dataset should be included. Only affects the training set.
           ignore_broken: bool. Flag to determine whether the broken files in the dataset should be included.Affects all sets.
