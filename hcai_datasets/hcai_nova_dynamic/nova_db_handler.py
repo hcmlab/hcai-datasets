@@ -228,19 +228,19 @@ class NovaDBHandler():
 
     mongo_schemes = self.get_docs_by_prop(scheme, 'name', dataset, SCHEME_COLLECTION)
     if not mongo_schemes:
-      warnings.warn(f'No entries with scheme {scheme} found')
+      warnings.warn(f'Unknown scheme {scheme} found')
       return []
     mongo_annotators = self.get_docs_by_prop(annotator, 'name', dataset, ANNOTATOR_COLLECTION)
     if not mongo_annotators:
-      warnings.warn(f'No entries for annotator {annotator} found')
+      warnings.warn(f'Unknown annotator {annotator} found')
       return []
     mongo_roles = self.get_docs_by_prop(roles, 'name', dataset, ROLE_COLLECTION)
     if not mongo_roles:
-      warnings.warn(f'No entries for role {roles} found')
+      warnings.warn(f'Unknown role {roles} found')
       return []
     mongo_sessions = self.get_docs_by_prop(session, 'name', dataset, SESSION_COLLECTION)
     if not mongo_sessions:
-      warnings.warn(f'No entries for session {session} found')
+      warnings.warn(f'Unknown for session {session} found')
       return []
 
     mongo_annos = self.get_annotation_docs(mongo_schemes, mongo_sessions, mongo_annotators, mongo_roles, dataset, ANNOTATION_COLLECTION)
