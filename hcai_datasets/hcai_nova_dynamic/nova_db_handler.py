@@ -236,11 +236,11 @@ class NovaDBHandler():
       return []
     mongo_roles = self.get_docs_by_prop(roles, 'name', dataset, ROLE_COLLECTION)
     if not mongo_roles:
-      print(f'No entries for role {roles} found')
+      warnings.warn(f'No entries for role {roles} found')
       return []
     mongo_sessions = self.get_docs_by_prop(session, 'name', dataset, SESSION_COLLECTION)
     if not mongo_sessions:
-      print(f'No entries for session {session} found')
+      warnings.warn(f'No entries for session {session} found')
       return []
 
     mongo_annos = self.get_annotation_docs(mongo_schemes, mongo_sessions, mongo_annotators, mongo_roles, dataset, ANNOTATION_COLLECTION)
