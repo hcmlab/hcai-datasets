@@ -8,7 +8,7 @@ import numpy as np
 from pathlib import Path
 from tensorflow_datasets.core.splits import Split
 from hcai_dataset_utils.statistics import Statistics
-
+from hcai_datasets.hcai_affectnet.hcai_affectnet_iterable import HcaiAffectnetIterable
 
 _DESCRIPTION = """
 Affectnet is a dataset that has been crawled from the internet and annotated with respect to affective classes as well as valence and arousal.
@@ -37,7 +37,7 @@ RELEASE_NOTES = {
 }
 
 
-class HcaiAffectnetConfig(tfds.core.BuilderConfig):
+class HcaiAffectnetConfig(tfds.core.BuilderConfig, HcaiAffectnetIterable):
     """BuilderConfig for HcaiAffectnetConfig."""
 
     def __init__(
@@ -76,7 +76,7 @@ class HcaiAffectnetConfig(tfds.core.BuilderConfig):
         self.ignore_lists = ignore_lists
 
 
-class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
+class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, HcaiAffectnetIterable, Statistics):
     """DatasetBuilder for hcai_affectnet dataset."""
 
     BUILDER_CONFIGS = [
@@ -101,24 +101,20 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
         ),
     ]
 
-    IMAGE_FOLDER_COL = "image_folder"
+    def __init__(self, *args, **kwargs):
+        tfds.core.GeneratorBasedBuilder.__init__(self, *args, **kwargs)
 
-    def __init__(self, *, dataset_dir=None, **kwargs):
-        self.dataset_dir = dataset_dir
-        self.LABELS = [
-            "neutral",
-            "happy",
-            "sad",
-            "suprise",
-            "fear",
-            "disgust",
-            "anger",
-            "contempt",
-            "none",
-            "uncertain",
-            "non-face",
-        ]
-        super(HcaiAffectnet, self).__init__(**kwargs)
+        if self.builder_config is None:
+            HcaiAffectnetIterable.__init__(self, *args, **kwargs)
+        else:
+            HcaiAffectnetIterable.__init__(
+                self, *args,
+                include_auto=self.builder_config.include_auto,
+                ignore_duplicate=self.builder_config.include_auto,
+                ignore_broken=self.builder_config.include_auto,
+                ignore_unsupported_format=self.builder_config.include_auto,
+                ignore_lists=self.builder_config.include_auto,
+                **kwargs)
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Returns the dataset metadata."""
@@ -168,65 +164,8 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
 
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
-        print("Loading Labels...")
 
-        train_csv_path = (
-            Path(self.dataset_dir) / "Manually_Annotated_file_lists" / "training.csv"
-        )
-
-        # The official test set has not been released in this version so we use the validation set as test set
-        test_csv_path = (
-            Path(self.dataset_dir) / "Manually_Annotated_file_lists" / "validation.csv"
-        )
-
-        train_csv_path_auto = (
-            Path(self.dataset_dir)
-            / "Automatically_Annotated_file_lists"
-            / "automatically_annotated.csv"
-        )
-
-        train_df = pd.read_csv(train_csv_path, index_col=0)
-        test_df = pd.read_csv(test_csv_path, index_col=0)
-        train_df[self.IMAGE_FOLDER_COL] = ["Manually_Annotated_Images"] * len(train_df)
-        test_df[self.IMAGE_FOLDER_COL] = ["Manually_Annotated_Images"] * len(test_df)
-
-        # append automatic labels if not ignored:
-        if self.builder_config.include_auto:
-            train_df_auto = pd.read_csv(train_csv_path_auto, index_col=0)
-            train_df_auto[self.IMAGE_FOLDER_COL] = ["Automatically_Annotated_Images"]
-            train_df = pd.concat([train_df, train_df_auto])
-
-        len_train = len(train_df)
-        len_test = len(test_df)
-        print(
-            "...loaded {} images for train\n...loaded {} images for test".format(
-                len_train, len_test
-            )
-        )
-
-        # removing labels that are specified in the ignore-lists
-        print("Applying ignore lists...")
-
-        filter_list_path = Path(__file__).parent / "Ignore_Lists"
-        for filter_list in self._builder_config.ignore_lists:
-            print("... {}:".format(filter_list))
-            with open(filter_list_path / filter_list) as json_file:
-                filter = json.load(json_file)
-                train_df.drop(filter, errors="ignore", inplace=True)
-                test_df.drop(filter, errors="ignore", inplace=True)
-            print(
-                "\t...dropped {} images from train\n\t... dropped {} images from test".format(
-                    len_train - len(train_df), len_test - len(test_df)
-                )
-            )
-            len_train = len(train_df)
-            len_test = len(test_df)
-
-        print(
-            "Final set sizes: \nTrain {}\nTest {}".format(len(train_df), len(test_df))
-        )
-
-        data = [(Split.TRAIN, train_df), (Split.TEST, test_df)]
+        data = [(Split.TRAIN, self.train_df), (Split.TEST, self.test_df)]
 
         self._populate_meta_data(data)
 
@@ -235,23 +174,6 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, Statistics):
             for split_name, split_data in data
         }
 
-    def _generate_examples(self, label_df):
-        for index, row in label_df.iterrows():
-            landmarks = np.fromstring(
-                    row["facial_landmarks"], sep=";", dtype=np.float32
-                ).reshape((68, 2))
-
-            #ymin = row["face_y"]
-            #ymax = row["face_height"] + ymin
-            #xmin = row["face_x"]
-            #xmax = row["face_width"] + xmin
-
-            yield index, {
-                "image": Path(self.dataset_dir) / row[self.IMAGE_FOLDER_COL] / index,
-                "expression": row["expression"],
-                "arousal": row["arousal"],
-                "valence": row["valence"],
-                "facial_landmarks": landmarks,
-                "rel_file_path": row[self.IMAGE_FOLDER_COL] + "/" + index,
-                #"face_bbox": tfds.features.BBox(ymin=ymin, xmin=xmin, ymax=ymax, xmax=xmax)
-            }
+    def _generate_examples(self, split_data):
+        for sample in self._yield_examples(split_data):
+            yield sample["index"], sample

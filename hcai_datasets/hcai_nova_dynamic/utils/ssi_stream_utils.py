@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 import numpy as np
-from hcai_datasets.hcai_nova_dynamic.utils.ssi_data_types import NPDataTypes, TFDataTypes, FileTypes, string_to_enum
+from hcai_datasets.hcai_nova_dynamic.utils.ssi_data_types import NPDataTypes, FileTypes, string_to_enum
 
 class Stream:
     #def __init__(self, ftype="UNDEF" , sr=0.0, dim=0, byte=4, type="UNDEF", delim="", chunks = []):
@@ -10,7 +10,6 @@ class Stream:
         self.dim = 0
         self.byte = 4
         self.type = "UNDEF"
-        self.tftype = "UNDEF"
         self.delim = ""
         self.chunks = []
         self.data = None
@@ -35,7 +34,6 @@ class Stream:
                     elif key == 'byte':
                         self.byte = int(val)
                     elif key == 'type':
-                        self.tftype = string_to_enum(TFDataTypes, val).value
                         self.type = string_to_enum(NPDataTypes, val).value
                     elif key == 'delim':
                         self.delim = val

@@ -6,7 +6,7 @@ import pandas as pd
 from tensorflow_datasets.core.splits import Split
 from pathlib import Path
 from hcai_dataset_utils.statistics import Statistics
-
+from hcai_datasets.hcai_faces.hcai_faces_iterable import HcaiFacesIterable
 
 _DESCRIPTION = """
 FACES is a set of images of naturalistic faces of 171 young (n = 58), middle-aged (n = 56), and older (n = 57) women and 
@@ -29,7 +29,7 @@ _CITATION = """
 """
 
 
-class HcaiFaces(tfds.core.GeneratorBasedBuilder, Statistics):
+class HcaiFaces(tfds.core.GeneratorBasedBuilder, HcaiFacesIterable, Statistics):
     """DatasetBuilder for hcai_faces dataset."""
 
     VERSION = tfds.core.Version("1.0.0")
@@ -37,9 +37,9 @@ class HcaiFaces(tfds.core.GeneratorBasedBuilder, Statistics):
         "1.0.0": "Initial release.",
     }
 
-    def __init__(self, *, dataset_dir=None, **kwargs):
-        super(HcaiFaces, self).__init__(**kwargs)
-        self.dataset_dir = Path(dataset_dir) / "bilder"
+    def __init__(self, *args, **kwargs):
+        tfds.core.GeneratorBasedBuilder.__init__(self, *args, **kwargs)
+        HcaiFacesIterable.__init__(self, *args, **kwargs)
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Returns the dataset metadata."""
@@ -72,28 +72,12 @@ class HcaiFaces(tfds.core.GeneratorBasedBuilder, Statistics):
 
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
-        f_names = list(self.dataset_dir.glob("*.jpg"))
-        parsed = [n.stem.split("_") for n in f_names]
-        self._populate_meta_data(parsed)
+        self._populate_meta_data(self.parsed)
 
         return {
-            Split.TRAIN: self._generate_examples(zip(f_names, parsed)),
+            Split.TRAIN: self._generate_examples(self._parsed),
         }
 
     def _generate_examples(self, files):
-        """Yields examples.
-        # Labels are parese using filenames:
-        # "ID_ageGroup_gender_emotion_pictureSet.jpg"""
-        for f, p in files:
-
-            id, age, gender, emotion, set = p
-
-            yield str(f), {
-                "image": f,
-                "id": int(id),
-                "age": age,
-                "gender": gender,
-                "emotion": emotion,
-                "set": set,
-                "rel_file_path": str(f.relative_to(f.parents[1])),
-            }
+        for sample in self.yield_samples(files):
+            yield sample["index"], sample

@@ -5,7 +5,7 @@ import pandas as pd
 from tensorflow_datasets.core.splits import Split
 from pathlib import Path
 from hcai_dataset_utils.statistics import Statistics
-
+from hcai_datasets.hcai_ckplus.hcai_ckplus_iterable import HcaiCkplusIterable
 
 _DESCRIPTION = """
 The Extended Cohn-Kanade (CK+) dataset contains 593 video sequences from a total of 123 different subjects, ranging from 18 to 50 years of age with a variety of genders and heritage.
@@ -23,7 +23,7 @@ _CITATION = """
 """
 
 
-class HcaiCkplus(tfds.core.GeneratorBasedBuilder, Statistics):
+class HcaiCkplus(tfds.core.GeneratorBasedBuilder, HcaiCkplusIterable, Statistics):
     """DatasetBuilder for hcai_ckplus dataset."""
 
     VERSION = tfds.core.Version("1.0.0")
@@ -31,20 +31,9 @@ class HcaiCkplus(tfds.core.GeneratorBasedBuilder, Statistics):
         "1.0.0": "Initial release.",
     }
 
-    LABELS = [
-        "neutral",
-        "anger",
-        "contempt",
-        "disgust",
-        "fear",
-        "happy",
-        "sadness",
-        "suprise",
-    ]
-
-    def __init__(self, *, dataset_dir=None, **kwargs):
-        self.dataset_dir = Path(dataset_dir)
-        super(HcaiCkplus, self).__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        tfds.core.GeneratorBasedBuilder.__init__(self, *args, **kwargs)
+        HcaiCkplusIterable.__init__(self, *args, **kwargs)
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Returns the dataset metadata."""
@@ -76,29 +65,9 @@ class HcaiCkplus(tfds.core.GeneratorBasedBuilder, Statistics):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
 
-        emo_anno_files = list(self.dataset_dir.glob("Emotion/**/**/*.txt"))
-        samples = []
-
-        for ef in emo_anno_files:
-            with open(ef, "r") as f:
-                emotion = self.LABELS[int(float(f.readline().strip()))]
-                fn_img = ef.stem.replace("_emotion", ".png")
-                samples.append((fn_img, emotion))
-
-                # add neutral images
-                fn_img_neut = ef.stem.rsplit("_", 2)[0] + "_00000001.png"
-                samples.append((fn_img_neut, "neutral"))
-
-        self._populate_meta_data(samples)
-        return {Split.TRAIN: self._generate_examples(samples)}
+        self._populate_meta_data(self.samples)
+        return {Split.TRAIN: self._generate_examples(self.samples)}
 
     def _generate_examples(self, files):
-        """Yields examples."""
-
-        for f, e in files:
-            rel_path = (Path(*f.split("_")[:-1]) / f).resolve()
-            yield str(f), {
-                "image": self.dataset_dir / "cohn-kanade-images" / rel_path,
-                "label": e,
-                "rel_file_path": str(rel_path),
-            }
+        for sample in self._yield_samples(files):
+            yield sample["index"], sample

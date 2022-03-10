@@ -1,6 +1,5 @@
 from enum import Enum
 import numpy as np
-import tensorflow as tf
 
 class FileTypes(Enum):
         UNDEF = 0
@@ -24,19 +23,6 @@ class NPDataTypes(Enum):
     #STRUCT = 12
     #IMAGE = 13
     BOOL = np.bool_
-
-class TFDataTypes(Enum):
-  UNDEF = 0
-  SHORT = tf.int16
-  USHORT = tf.uint16
-  INT = tf.int32
-  UINT = tf.uint32
-  LONG = tf.int64
-  ULONG = tf.uint64
-  FLOAT = tf.float32
-  DOUBLE = tf.float64
-  LDOUBLE = tf.float64
-  BOOL = tf.bool
 
 '''Helper'''
 def string_to_enum(enum, string):

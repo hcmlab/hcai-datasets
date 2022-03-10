@@ -1,5 +1,3 @@
-import tensorflow as tf
-import tensorflow_datasets as tfds
 import hcai_datasets.hcai_nova_dynamic.utils.nova_types as nt
 import numpy as np
 import pandas as pd
@@ -61,11 +59,12 @@ class Annotation(ABC):
         self.data = None
 
     @abstractmethod
-    def get_tf_info(self):
+    def get_info(self):
         """
         Returns the labels for this annotation to create the DatasetInfo for tensorflow
         """
         raise NotImplementedError
+
 
     @abstractmethod
     def set_annotation_from_mongo_doc(self, session, time_to_ms=False):
@@ -98,11 +97,11 @@ class DiscreteAnnotation(Annotation):
         if self.add_rest_class:
             self.labels[max(self.labels.keys()) + 1] = DiscreteAnnotation.REST
 
-    def get_tf_info(self):
-        return (
-            merge_role_key(self.role, self.scheme),
-            tfds.features.ClassLabel(names=list(self.labels.values())),
-        )
+    def get_info(self):
+        return merge_role_key(self.role, self.scheme), {
+            "dtype": np.int32,
+            "shape": 1
+        }
 
     def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
         self.data = mongo_doc
@@ -198,11 +197,11 @@ class FreeAnnotation(Annotation):
         self.type = nt.AnnoTypes.FREE
         super().__init__(**kwargs)
 
-    def get_tf_info(self):
-        return (
-            merge_role_key(self.role, self.scheme),
-            tfds.features.Sequence(tfds.features.Text()),
-        )
+    def get_info(self):
+        return merge_role_key(self.role, self.scheme), {
+            "dtype": np.str,
+            "shape": (None,)
+        }
 
     def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
         self.data = mongo_doc
@@ -290,24 +289,12 @@ class DiscretePolygonAnnotation(Annotation):
         self.sr = sr
         self.dummy_label = np.full((10, 2), -1, dtype=np.float64)
 
-    def get_tf_info(self):
-        """
-                Example:
-                   <role>.<scheme>, {
-                        'label_id_1' : [ (x1,y1), (x2,y2), ...  (xn, yn)],
-                        'label_id_2' : ...
-                        ...
-        ,           }
-        """
-        tf_features = tfds.features.FeaturesDict(
-            {
-                str(l): tfds.features.Sequence(
-                    tfds.features.Tensor(shape=(2,), dtype=tf.float64)
-                )
-                for l in self.labels.keys()
-            }
-        )
-        return (merge_role_key(self.role, self.scheme), tf_features)
+    def get_info(self):
+        # TODO fix, this is not right
+        return merge_role_key(self.role, self.scheme), {
+            "dtype": np.float64,
+            "shape": (2,),
+        }
 
     def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
         self.data = mongo_doc
