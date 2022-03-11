@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import os
 import shutil
@@ -303,16 +305,13 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 ]
                 data_for_frame = []
 
-                # TODO find root cause of empty_sample and fix
-                empty_sample = False
                 for k, v in self.data_info.items():
                     sample = v.get_sample(frame_start_ms, frame_end_ms)
-                    if sample.shape[0] != 1:
-                        empty_sample = True
+                    if sample.shape[0] == 0:
+                        print(f'Sample{frame_start_ms}-{frame_end_ms} is empty')
+                        c_pos_ms += self.stride_ms
+                        continue
                     data_for_frame.append({k: sample})
-                if empty_sample:
-                    c_pos_ms += self.stride_ms
-                    continue
 
                 sample_dict = {}
 
