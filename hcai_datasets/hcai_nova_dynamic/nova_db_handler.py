@@ -1,5 +1,6 @@
 import configparser
 import os
+import warnings
 from pymongo import MongoClient
 
 ANNOTATOR_COLLECTION = 'Annotators'
@@ -227,21 +228,20 @@ class NovaDBHandler():
 
     mongo_schemes = self.get_docs_by_prop(scheme, 'name', dataset, SCHEME_COLLECTION)
     if not mongo_schemes:
-      print('No entries with scheme {} found'.format(scheme))
-      #TODO: replace with exceptions for better handling
-      exit()
+      warnings.warn(f'Unknown scheme {scheme} found')
+      return []
     mongo_annotators = self.get_docs_by_prop(annotator, 'name', dataset, ANNOTATOR_COLLECTION)
     if not mongo_annotators:
-      print('No entries for annotator {} found'.format(annotator))
-      exit()
+      warnings.warn(f'Unknown annotator {annotator} found')
+      return []
     mongo_roles = self.get_docs_by_prop(roles, 'name', dataset, ROLE_COLLECTION)
     if not mongo_roles:
-      print('No entries for role {} found'.format(roles))
-      exit()
+      warnings.warn(f'Unknown role {roles} found')
+      return []
     mongo_sessions = self.get_docs_by_prop(session, 'name', dataset, SESSION_COLLECTION)
     if not mongo_sessions:
-      print('No entries for session {} found'.format(session))
-      exit()
+      warnings.warn(f'Unknown for session {session} found')
+      return []
 
     mongo_annos = self.get_annotation_docs(mongo_schemes, mongo_sessions, mongo_annotators, mongo_roles, dataset, ANNOTATION_COLLECTION)
 
