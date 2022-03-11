@@ -37,9 +37,9 @@ class HcaiFaces(tfds.core.GeneratorBasedBuilder, HcaiFacesIterable, Statistics):
         "1.0.0": "Initial release.",
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, dataset_dir, *args, **kwargs):
         tfds.core.GeneratorBasedBuilder.__init__(self, *args, **kwargs)
-        HcaiFacesIterable.__init__(self, *args, **kwargs)
+        HcaiFacesIterable.__init__(self, *args, dataset_dir=dataset_dir, **kwargs)
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Returns the dataset metadata."""

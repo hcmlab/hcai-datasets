@@ -31,9 +31,9 @@ class HcaiCkplus(tfds.core.GeneratorBasedBuilder, HcaiCkplusIterable, Statistics
         "1.0.0": "Initial release.",
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, dataset_dir, **kwargs):
         tfds.core.GeneratorBasedBuilder.__init__(self, *args, **kwargs)
-        HcaiCkplusIterable.__init__(self, *args, **kwargs)
+        HcaiCkplusIterable.__init__(self, *args, dataset_dir=dataset_dir, **kwargs)
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Returns the dataset metadata."""

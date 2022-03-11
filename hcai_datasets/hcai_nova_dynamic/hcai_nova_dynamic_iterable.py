@@ -371,7 +371,6 @@ class HcaiNovaDynamicIterable(DatasetIterable):
             return lid
 
         return {
-                    # TODO: Remove frame when tfds implements option to disable shuffle
                     # Adding fake framenumber label for sorting
                     'frame': {"dtype":np.str, "shape":(1,)},
                     **{map_label_id(k): v.get_info()[1] for k, v in self.label_info.items()},
