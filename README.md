@@ -1,5 +1,7 @@
 ### Description
-This repository contains code to make datasets stored on th corpora network drive of the chair compatible with the [tensorflow dataset api](https://www.tensorflow.org/api_docs/python/tf/data/Dataset) .
+This repository contains code to make datasets stored on th corpora network drive of the chair
+compatible with the [tensorflow dataset api](https://www.tensorflow.org/api_docs/python/tf/data/Dataset).
+Pytorch Dataset [is also supported](https://pytorch.org/vision/stable/datasets.html).
  
 ### Currently available Datasets
 
@@ -13,6 +15,8 @@ This repository contains code to make datasets stored on th corpora network driv
 | is2021_ess    | ❌             |    -|
 | librispeech   | ❌             |    https://www.openslr.org/12 |
 
+
+## Tensorflow Dataset API
 
 ### Example Usage
 
@@ -113,3 +117,28 @@ model = CalibratedClassifierCV(linear_svc,
 print('train_x shape: {} | train_x[0] shape: {}'.format(x_np.shape, x_np[0].shape))
 model.fit(x_np, y_np)
 ```
+
+## Pytorch API
+
+
+## Plain Tensorflow API
+
+
+
+## Architecture considerations
+
+![uml diagram](image/architecture.png)
+
+Dataset implementations are split into two parts.\
+Data access is handled by a generic python iterable, implemented by the DatasetIterable interface.\
+The access class is then extended by an API class, which implements tfds.core.GeneratorBasedBuilder.
+This results in the dataset being available by the Tensorflow Datasets API, and enables features 
+such as local caching.
+
+The iterables themselves can also be used as-is, either in PyTorch native DataGenerators by wrapping them in
+the utility class BridgePyTorch, or as tensorflow-native Datasets by passing them to BridgeTensorflow.
+
+The benefits of this setup are that a pytorch application can be served without installing or loading 
+tensorflow, and vice versa, since the stack up to the adapters does not involve tf or pytorch. 
+Also, when using tf, caching can be used or discarded by using tfds or the plain tensorflow Dataset
+provided by the bridge.

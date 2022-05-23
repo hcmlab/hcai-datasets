@@ -166,7 +166,7 @@ class HcaiNovaDynamic(HcaiNovaDynamicIterable, tfds.core.GeneratorBasedBuilder):
         elif scheme_type == nt.DataTypes.AUDIO:
             return tfds.features.Audio()
         elif scheme_type == nt.DataTypes.FEATURE:
-            data_type = data.data_type
+            data_type = data.np_data_type
             if BridgeTensorflow.TYPE_MAPPING[data_type] is not None:
                 data_type = BridgeTensorflow.TYPE_MAPPING[data_type]
             return tfds.features.Sequence(
