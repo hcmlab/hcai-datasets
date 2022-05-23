@@ -192,8 +192,8 @@ class VideoData(Data):
         }
 
     def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
-        start_frame = int(frame_start_ms / 1000 * self.sr)
-        end_frame = int(frame_end_ms / 1000 * self.sr)
+        start_frame = int(frame_start_ms * self.sr / 1000)
+        end_frame = int(frame_end_ms * self.sr / 1000)
         chunk = self.file_reader.get_batch(
             list(range(start_frame, end_frame))
         ).asnumpy()
