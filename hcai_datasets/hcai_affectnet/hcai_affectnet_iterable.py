@@ -94,7 +94,7 @@ class HcaiAffectnetIterable(DatasetIterable):
 
             yield {
                 "index": index,
-                "image": Path(self.dataset_dir) / row[self.IMAGE_FOLDER_COL] / index,
+                "image": str(Path(self.dataset_dir) / row[self.IMAGE_FOLDER_COL] / index),
                 "expression": row["expression"],
                 "arousal": row["arousal"],
                 "valence": row["valence"],

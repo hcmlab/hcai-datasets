@@ -12,8 +12,13 @@ class BridgeTensorflow:
     TYPE_MAPPING = {
         np.str: tf.string,
         np.int: tf.int32,
+        np.int8: tf.int8,
         np.int32: tf.int32,
         np.int64: tf.int64,
+        np.uint: tf.uint32,
+        np.uint8: tf.uint8,
+        np.uint32: tf.uint32,
+        np.uint64: tf.uint64,
         np.float: tf.float32,
         np.float32: tf.float32,
         np.float64: tf.float32,
