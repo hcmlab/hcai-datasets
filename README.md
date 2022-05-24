@@ -123,6 +123,48 @@ model.fit(x_np, y_np)
 
 ## Plain Tensorflow API
 
+### Example usage
+
+```python
+from configparser import ConfigParser
+from hcai_dataset_utils.bridge_tf import BridgeTensorflow
+import tensorflow as tf
+from hcai_datasets.hcai_faces.hcai_faces_iterable import HcaiFacesIterable
+
+if __name__ == "__main__":
+
+    config = ConfigParser()
+    config.read("config.ini")
+
+    iterable = HcaiFacesIterable(
+        dataset_dir=config["directories"]["data_dir"] + "/FACES",
+        split="test"
+    )
+    dataset = BridgeTensorflow.make(iterable)
+
+    # cast to supervised tuples
+    dataset = dataset.map(lambda s: (s["image"], s["emotion"]))
+    # open files, resize images, one-hot vectors
+    dataset = dataset.map(lambda x, y: (
+        tf.image.resize(
+            tf.image.decode_image(tf.io.read_file(x), channels=3, dtype=tf.uint8, expand_animations=False),
+            size=[224, 224]
+        ),
+        tf.one_hot(y, depth=6)
+    ))
+    # batch
+    dataset = dataset.batch(32, drop_remainder=True)
+
+    # premade efficientnet
+    efficientnet = tf.keras.applications.EfficientNetB0(
+        include_top=True,
+        weights=None,
+        classes=6,
+        classifier_activation="softmax"
+    )
+    efficientnet.compile(optimizer="adam", loss="categorical_crossentropy")
+    efficientnet.fit(dataset, epochs=1)
+```
 
 
 ## Architecture considerations

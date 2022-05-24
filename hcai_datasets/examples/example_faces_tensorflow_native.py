@@ -24,14 +24,14 @@ if __name__ == "__main__":
 
     # cast to supervised tuples
     dataset = dataset.map(lambda s: (s["image"], s["emotion"]))
-    # open files, resize images
+    # open files, resize images, one-hot vectors
     dataset = dataset.map(lambda x, y: (
         tf.image.resize(
             tf.image.decode_image(tf.io.read_file(x), channels=3, dtype=tf.uint8, expand_animations=False),
             size=[224, 224]
-        ), y
+        ),
+        tf.one_hot(y, depth=6)
     ))
-    # dataset = dataset.map(lambda x, y: (tf.ensure_shape(x, [224, 224, 3]), y))
     # batch
     dataset = dataset.batch(32, drop_remainder=True)
 
@@ -46,5 +46,5 @@ if __name__ == "__main__":
         classes=6,
         classifier_activation="softmax"
     )
-    efficientnet.compile(optimizer="adam", loss="categorical_crossentropy", metrics="accuracy")
+    efficientnet.compile(optimizer="adam", loss="categorical_crossentropy")
     efficientnet.fit(dataset, epochs=1)
