@@ -38,7 +38,7 @@ class HcaiFacesIterable(DatasetIterable):
     def _generate_index(self):
         f_names = list(self.dataset_dir.glob("*.jpg"))
         parsed = [n.stem.split("_") for n in f_names]
-        self.parsed = zip(f_names, parsed)
+        self.parsed = list(zip(f_names, parsed))
 
     def yield_samples(self, files):
         """Yields examples.

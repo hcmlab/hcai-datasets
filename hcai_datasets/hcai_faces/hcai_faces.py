@@ -38,8 +38,8 @@ class HcaiFaces(tfds.core.GeneratorBasedBuilder, HcaiFacesIterable, Statistics):
     }
 
     def __init__(self, dataset_dir, *args, **kwargs):
-        tfds.core.GeneratorBasedBuilder.__init__(self, *args, **kwargs)
         HcaiFacesIterable.__init__(self, *args, dataset_dir=dataset_dir, **kwargs)
+        tfds.core.GeneratorBasedBuilder.__init__(self, *args, **kwargs)
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Returns the dataset metadata."""
@@ -50,6 +50,7 @@ class HcaiFaces(tfds.core.GeneratorBasedBuilder, HcaiFacesIterable, Statistics):
             features=tfds.features.FeaturesDict(
                 {
                     # These are the features of your dataset like images, labels ...
+                    "index": tf.string,
                     "image": tfds.features.Image(shape=(3543, 2835, 3)),
                     "id": tf.int64,
                     "age": tfds.features.ClassLabel(names=["y", "o", "m"]),
@@ -72,10 +73,10 @@ class HcaiFaces(tfds.core.GeneratorBasedBuilder, HcaiFacesIterable, Statistics):
 
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
-        self._populate_meta_data(self.parsed)
+        self._populate_meta_data([data for file, data in self.parsed])
 
         return {
-            Split.TRAIN: self._generate_examples(self._parsed),
+            Split.TRAIN: self._generate_examples(self.parsed),
         }
 
     def _generate_examples(self, files):

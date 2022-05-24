@@ -17,7 +17,7 @@ if __name__ == "__main__":
     dataloader = DataLoader(BridgePyTorch(iterable))
 
     for i, sample in enumerate(dataloader):
-        if i > 10:
+        if i > 0:
             break
         print(sample)
 

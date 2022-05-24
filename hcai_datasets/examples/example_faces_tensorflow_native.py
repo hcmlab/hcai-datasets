@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     iterable = HcaiFacesIterable(
         dataset_dir=config["directories"]["data_dir"] + "/FACES",
-        split="test"
+        split="train"
     )
     dataset = BridgeTensorflow.make(iterable)
 
