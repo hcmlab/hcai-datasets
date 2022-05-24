@@ -30,8 +30,9 @@ class HcaiCkplusIterable(DatasetIterable):
 
     def get_output_info(self):
         return {
+            "index": {"dtype": np.str, "shape": (1,)},
             "image": {"dtype": np.str, "shape": (1,)},
-            "label": {"dtype": np.uint32, "shape": (1,)},
+            "label": {"dtype": np.uint8, "shape": (1,)},
             "rel_file_path": {"dtype": np.str, "shape": (1,)},
         }
 
@@ -58,7 +59,7 @@ class HcaiCkplusIterable(DatasetIterable):
             rel_path = (Path(*f.split("_")[:-1]) / f).resolve()
             yield {
                 "index": str(f),
-                "image": self.dataset_dir / "cohn-kanade-images" / rel_path,
-                "label": e,
+                "image": str(self.dataset_dir / "cohn-kanade-images" / rel_path),
+                "label": self.LABELS.index(e),
                 "rel_file_path": str(rel_path),
             }

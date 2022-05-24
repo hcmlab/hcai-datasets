@@ -43,6 +43,7 @@ class HcaiCkplus(tfds.core.GeneratorBasedBuilder, HcaiCkplusIterable, Statistics
             metadata=tfds.core.MetadataDict({}),
             features=tfds.features.FeaturesDict(
                 {
+                    "index": tf.string,
                     "image": tfds.features.Image(shape=(None, None, 3)),
                     # 0=neutral, 1=anger, 2=contempt, 3=disgust, 4=fear, 5=happy, 6=sadness, 7=surprise)
                     "label": tfds.features.ClassLabel(names=self.LABELS),
