@@ -101,19 +101,16 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, HcaiAffectnetIterable, Stat
         ),
     ]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, dataset_dir, **kwargs):
         tfds.core.GeneratorBasedBuilder.__init__(self, *args, **kwargs)
-
         if self.builder_config is None:
-            HcaiAffectnetIterable.__init__(self, *args, **kwargs)
+            HcaiAffectnetIterable.__init__(self, *args, dataset_dir=dataset_dir, **kwargs)
         else:
             HcaiAffectnetIterable.__init__(
                 self, *args,
+                dataset_dir=dataset_dir,
                 include_auto=self.builder_config.include_auto,
-                ignore_duplicate=self.builder_config.include_auto,
-                ignore_broken=self.builder_config.include_auto,
-                ignore_unsupported_format=self.builder_config.include_auto,
-                ignore_lists=self.builder_config.include_auto,
+                ignore_lists=self.builder_config.ignore_lists,
                 **kwargs)
 
     def _info(self) -> tfds.core.DatasetInfo:
@@ -125,6 +122,7 @@ class HcaiAffectnet(tfds.core.GeneratorBasedBuilder, HcaiAffectnetIterable, Stat
             features=tfds.features.FeaturesDict(
                 {
                     # These are the features of your dataset like images, labels ...
+                    "index": tf.string,
                     "image": tfds.features.Image(shape=(None, None, 3)),
                     "expression": tfds.features.ClassLabel(names=self.LABELS),
                     "arousal": tf.float32,

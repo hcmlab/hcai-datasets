@@ -10,7 +10,22 @@ import numpy as np
 
 
 class HcaiAffectnetIterable(DatasetIterable):
+
     IMAGE_FOLDER_COL = "image_folder"
+
+    LABELS = [
+        "neutral",
+        "happy",
+        "sad",
+        "suprise",
+        "fear",
+        "disgust",
+        "anger",
+        "contempt",
+        "none",
+        "uncertain",
+        "non-face",
+    ]
 
     def __init__(
             self,
@@ -49,19 +64,6 @@ class HcaiAffectnetIterable(DatasetIterable):
         self.ignore_lists = ignore_lists
 
         self.dataset_dir = dataset_dir
-        self.LABELS = [
-            "neutral",
-            "happy",
-            "sad",
-            "suprise",
-            "fear",
-            "disgust",
-            "anger",
-            "contempt",
-            "none",
-            "uncertain",
-            "non-face",
-        ]
         self._load_meta_data()
 
         if self.split == "train":
@@ -79,7 +81,7 @@ class HcaiAffectnetIterable(DatasetIterable):
         return {
             "index": {"dtype": np.str, "shape": (1,)},
             "image": {"dtype": np.str, "shape": (1,)},
-            "expression": {"dtype": np.uint32, "shape": (1,)},
+            "expression": {"dtype": np.uint8, "shape": (1,)},
             "arousal": {"dtype": np.float32, "shape": (1,)},
             "valence": {"dtype": np.float32, "shape": (1,)},
             "facial_landmarks": {"dtype": np.uint32, "shape": (68, 2)},
