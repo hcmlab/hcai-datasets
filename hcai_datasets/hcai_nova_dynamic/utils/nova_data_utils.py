@@ -1,5 +1,5 @@
 import cv2
-from decord import VideoReader, cpu
+from decord import VideoReader, AudioReader, cpu
 import numpy as np
 import os
 
@@ -132,53 +132,36 @@ class AudioData(Data):
 
     def get_info_hook(self):
         return merge_role_key(self.role, self.name), {
-            "shape": (None, 1),
-            "dtype": np.uint8
+            "shape": self.sample_data_shape,
+            "dtype": np.float32
         }
 
     def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
-        start_frame = frame_start_ms / 1000 * self.sr
-        end_frame = frame_end_ms / 1000 * self.sr
-        length = int(end_frame - start_frame)
-
-        self.file_reader.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-        chunk = np.zeros((length,) + self.sample_data_shape, dtype=np.uint8)
-
-        for i in range(length):
-            ret, frame = self.file_reader.read()
-
-            if not ret:
-                raise IndexError("Video frame {} out of range".format(i))
-
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            chunk[i] = frame
-
+        start_frame = int(frame_start_ms * self.sr / 1000)
+        end_frame = int(frame_end_ms * self.sr / 1000)
+        chunk = self.file_reader.get_batch(
+            list(range(start_frame, end_frame))
+        ).asnumpy()
         return chunk
 
     def open_file_reader_hook(self, path: str):
         if not os.path.isfile(path):
             print("Session file not found at {}.".format(path))
             raise FileNotFoundError()
-        self.file_reader = cv2.VideoCapture(path)
-        fps = self.file_reader.get(
-            cv2.CAP_PROP_FPS
-        )  # OpenCV2 version 2 used "CV_CAP_PROP_FPS"
-        frame_count = int(self.file_reader.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.dur = frame_count / fps
+        self.file_reader = AudioReader(path, ctx=cpu(0), mono=False)
+        self.dur = self.file_reader.duration()
 
     def populate_meta_info(self, path: str):
         if not os.path.isfile(path):
             print("Sample file not found at {}. Can't load metadata.".format(path))
             raise FileNotFoundError()
-        file_reader = cv2.VideoCapture(path)
-        width = int(file_reader.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(file_reader.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        depth = 3
-        self.sample_data_shape = (height, width, depth)
+        file_reader = AudioReader(path, ctx=cpu(0), mono=False)
+        n_channels = file_reader.shape[0]
+        self.sample_data_shape = (None, n_channels)
         self.meta_loaded = True
 
     def close_file_reader(self):
-        return self.file_reader.release()
+        return True
 
 
 class VideoData(Data):

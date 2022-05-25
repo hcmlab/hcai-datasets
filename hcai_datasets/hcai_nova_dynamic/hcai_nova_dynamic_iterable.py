@@ -223,7 +223,15 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                         lazy_loading=self.lazy_loading,
                     )
                 elif dtype == nt.DataTypes.AUDIO:
-                    raise NotImplementedError("Audio files are not yet supported")
+                    data = AudioData(
+                        role=role,
+                        name=data_stream["name"],
+                        file_ext=data_stream["fileExt"],
+                        sr=data_stream["sr"],
+                        is_valid=data_stream["isValid"],
+                        sample_data_path=sample_data_path,
+                        lazy_loading=self.lazy_loading,
+                    )
                 elif dtype == nt.DataTypes.FEATURE:
                     data = StreamData(
                         role=role,
