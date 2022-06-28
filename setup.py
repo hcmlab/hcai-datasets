@@ -57,9 +57,11 @@ setup(
     packages=find_packages(),
     python_requires=">=3.6, <4",
     install_requires=[
-        "pymongo",
+        "pymongo==3.12",
         "opencv-python",
         "decord",
+        "torch",
+        "numba",
         "tensorflow>=2.7;platform_system=='windows'",
         "tensorflow>=2.7;platform_system=='linux'",
         "tensorflow-macos>=2.7;platform_system=='darwin'",
