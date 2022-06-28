@@ -6,7 +6,11 @@ Also you this code can be used to dynamically create a dataloader for a Nova dat
 Compatible with the [tensorflow dataset api](https://www.tensorflow.org/api_docs/python/tf/data/Dataset).
 Pytorch Dataset [is also supported](https://pytorch.org/vision/stable/datasets.html).
  
+## Installation Information
 
+For efficient data loading we rely on the [decord](https://github.com/dmlc/decord) library. 
+Decord ist not available as prebuild binary for non x86 architectures. 
+If you want to install the project on other architecture you will need to compile it yourself. 
 
 ## Currently available Datasets
 

@@ -59,7 +59,7 @@ setup(
     install_requires=[
         "pymongo==3.12",
         "opencv-python",
-        "decord",
+        "decord;platform_machine=='AMD64'",
         "torch",
         "numba",
         "tensorflow>=2.7;platform_system=='windows'",
