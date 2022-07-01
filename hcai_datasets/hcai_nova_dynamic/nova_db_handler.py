@@ -3,6 +3,7 @@ import os
 import warnings
 from datetime import datetime
 from pymongo import MongoClient
+from pymongo.results import InsertOneResult, UpdateResult
 from typing import Union
 
 ANNOTATOR_COLLECTION = "Annotators"
@@ -306,7 +307,9 @@ class NovaDBHandler:
         return label
 
     # Writing to database
-    def set_doc_by_prop(self, doc: dict, database: str, collection: str) -> str:
+    def insert_doc_by_prop(
+        self, doc: dict, database: str, collection: str
+    ) -> InsertOneResult:
         """
         Uploading a document to the database using the specificed parameters
         Args:
@@ -318,6 +321,24 @@ class NovaDBHandler:
           str: ObjectID of the inserted objects or an empty list in case of failure
         """
         ret = self.client[database][collection].insert_one(doc)
+        return ret
+
+    def update_doc_by_prop(
+        self, doc: dict, database: str, collection: str
+    ) -> UpdateResult:
+        """
+        Uploading a document to the database using the specificed parameters
+        Args:
+          docs: List of dictionaries with objects to upload to the database
+          database: The name of the database to search
+          collection: The name of the collection within the database to search
+
+        Returns:
+          str: ObjectID of the inserted objects or an empty list in case of failure
+        """
+        ret = self.client[database][collection].update_one(
+            {"_id": doc["_id"]}, {"$set": doc}
+        )
         return ret
 
     def set_annos(
@@ -364,20 +385,65 @@ class NovaDBHandler:
             warnings.warn(f"Unknown for session {session} found")
             return ""
 
-        mongo_label_doc = {"labels": annos}
-
-        data_id = self.set_doc_by_prop(
-            doc=mongo_label_doc, database=dataset, collection=ANNOTATION_DATA_COLLECTION
+        # Check if annotations already exist
+        mongo_annos = self.get_annotation_docs(
+            mongo_scheme,
+            mongo_session,
+            mongo_annotator,
+            mongo_role,
+            dataset,
+            ANNOTATION_COLLECTION,
         )
 
-        if not data_id.acknowledged:
-            warnings.warn(
-                f"Unexpected error uploading annotation data for {dataset} - {session} - {scheme} - {annotator}. Upload failed."
-            )
-            return ""
+        # Check for existing annotations
+        mongo_anno_id = None
+        mongo_data_id = None
+        if mongo_annos:
+            if mongo_annos[0]["isLocked"]:
+                warnings.warn(
+                    f"Can't overwrite locked annotation {str(mongo_annos[0]['_id'])}"
+                )
+                return ""
+            else:
+                warnings.warn(
+                    f"Overwriting existing annotation {str(mongo_annos[0]['_id'])}"
+                )
+                mongo_anno_id = mongo_annos[0]["_id"]
+                mongo_data_id = mongo_annos[0]["data_id"]
 
+        # Upload label data
+        mongo_label_doc = {"labels": annos}
+        if mongo_data_id:
+            mongo_label_doc["_id"] = mongo_data_id
+            success = self.update_doc_by_prop(
+                doc=mongo_label_doc,
+                database=dataset,
+                collection=ANNOTATION_DATA_COLLECTION,
+            )
+            if not success.acknowledged:
+                warnings.warn(
+                    f"Unknown error update database entries for Annotation data {mongo_data_id}"
+                )
+                return ""
+            else:
+                data_id = mongo_data_id
+        else:
+            success = self.insert_doc_by_prop(
+                doc=mongo_label_doc,
+                database=dataset,
+                collection=ANNOTATION_DATA_COLLECTION,
+            )
+            if not success.acknowledged:
+                warnings.warn(
+                    f"Unexpected error uploading annotation data for {dataset} - {session} - {scheme} - {annotator}. Upload failed."
+                )
+                return ""
+            else:
+                data_id = success.inserted_id
+
+        # Upload annotation information
         mongo_anno_doc = {
-            "data_id": data_id.inserted_id,
+            "data_id": data_id,
             "annotator_id": mongo_annotator[0]["_id"],
             "role_id": mongo_role[0]["_id"],
             "scheme_id": mongo_scheme[0]["_id"],
@@ -386,17 +452,29 @@ class NovaDBHandler:
             "isLocked": True,
             "date": datetime.today().replace(microsecond=0),
         }
-
-        anno_id = self.set_doc_by_prop(
-            doc=mongo_anno_doc, database=dataset, collection=ANNOTATION_COLLECTION
-        )
-
-        if not anno_id:
-            warnings.warn(
-                f"Unexpected error uploading annotations for {dataset} - {session} - {scheme} - {annotator}. Upload failed."
+        if mongo_anno_id:
+            mongo_anno_doc["_id"] = mongo_anno_id
+            success = self.update_doc_by_prop(
+                doc=mongo_anno_doc, database=dataset, collection=ANNOTATION_COLLECTION
             )
-            return ""
-
+            if not success.acknowledged:
+                warnings.warn(
+                    f"Unexpected error uploading annotations for {dataset} - {session} - {scheme} - {annotator}. Upload failed."
+                )
+                return ""
+            else:
+                anno_id = mongo_anno_id
+        else:
+            success = self.insert_doc_by_prop(
+                doc=mongo_anno_doc, database=dataset, collection=ANNOTATION_COLLECTION
+            )
+            if not success.acknowledged:
+                warnings.warn(
+                    f"Unexpected error uploading annotations for {dataset} - {session} - {scheme} - {annotator}. Upload failed."
+                )
+                return ""
+            else:
+                anno_id = success.inserted_id
         return anno_id
 
 
@@ -422,6 +500,7 @@ if __name__ == "__main__":
     new_annos = [
         {"from": 0, "to": 10, "id": 1, "conf": 0.5},
         {"from": 20, "to": 25, "id": 1, "conf": 1},
+        {"from": 30, "to": 35, "id": 1, "conf": 1},
     ]
 
     db_handler.set_annos(
