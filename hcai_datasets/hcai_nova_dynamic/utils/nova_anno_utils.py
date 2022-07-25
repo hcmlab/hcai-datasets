@@ -292,13 +292,14 @@ class ContinuousAnnotation(Annotation):
         self.data = np.array([tuple(i.values()) for i in mongo_doc])
 
     def get_label_for_frame(self, start, end):
+        # returns zero if session duration is longer then labels
         s = int(start * self.sr / 1000)
         e = int(end * self.sr / 1000)
         frame = self.data[s:e]
         frame_conf = frame[:,0]
         frame_data = frame[:,1]
-        conf = sum(frame_conf) / len(frame_conf)
-        label = sum(frame_data) / len(frame_data)
+        conf = sum(frame_conf) / max(len(frame_conf), 1)
+        label = sum(frame_data) / max(len(frame_data), 1)
         return label
 
 
