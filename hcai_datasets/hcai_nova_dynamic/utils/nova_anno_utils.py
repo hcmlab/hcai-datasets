@@ -55,7 +55,7 @@ class Annotation(ABC):
         self.scheme = scheme
         self.is_valid = is_valid
 
-        # Gets set when load_annotation is called
+        # Gets set when set_annotation_from_mongo_doc is called
         self.data = None
 
     @abstractmethod
@@ -74,9 +74,13 @@ class Annotation(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_label_for_frame(self, start, end):
+    def get_label_for_frame(self, start: int, end: int) -> object:
         """
         Returns the label for this frame
+
+        Args:
+            start (int): Start time of the frame in milliseconds
+            end (int): End time of the frame in milliseconds
         """
         raise NotImplementedError
 
@@ -269,13 +273,33 @@ class FreeAnnotation(Annotation):
         return self.get_label_for_frame_np(start, end)
 
 
-class ContinousAnnotation(Annotation):
-    def __init__(self, sr=0, min=0, max=0, **kwargs):
+class ContinuousAnnotation(Annotation):
+    def __init__(self, sr=0, min_val=0, max_val=0, **kwargs):
         super().__init__(**kwargs)
-        self.type = nt.AnnoTypes.CONTINOUS
+        self.type = nt.AnnoTypes.CONTINUOUS
         self.sr = sr
-        self.min = min
-        self.max = max
+        self.min_val = min_val
+        self.max_val = max_val
+
+    def get_info(self):
+        return merge_role_key(self.role, self.scheme), {
+            "dtype": np.int32,
+            "shape": 1
+        }
+
+    def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
+        # Numpy array with shape (len_data, 2) where the second dimension is a respective tuple (confidence, score)
+        self.data = np.array([tuple(i.values()) for i in mongo_doc])
+
+    def get_label_for_frame(self, start, end):
+        s = int(start * self.sr)
+        e = int(end * self.sr)
+        frame = self.data[s:e]
+        frame_conf = frame[:,0]
+        frame_data = frame[:,1]
+        conf = sum(frame_conf) / len(frame_conf)
+        label = sum(frame_data) / len(frame_data)
+        return label
 
 
 class DiscretePolygonAnnotation(Annotation):

@@ -128,7 +128,7 @@ class NovaDBHandler:
                 scheme, "name", dataset, SCHEME_COLLECTION
             )
             if not mongo_scheme:
-                print("WARNING: No scheme {} found in database".format(scheme))
+                print(f"WARNING: No scheme {scheme} found in database for dataset {dataset}")
             else:
                 mongo_schemes.append(mongo_scheme[0])
 
@@ -481,35 +481,59 @@ class NovaDBHandler:
 if __name__ == "__main__":
     db_handler = NovaDBHandler("../../local_data/nova_db_test.cfg")
 
-    dataset = "roxi"
-    session = "001"
-    scheme = "emotionalbursts"
-    annotator = "gold"
-    roles = ["player1"]
+    test_cont = True
+    test_cat = False
 
-    mongo_scheme = db_handler.get_schemes(dataset=dataset, schemes=[scheme])
-    annos = db_handler.get_annos(
-        dataset=dataset,
-        scheme=scheme,
-        session=session,
-        annotator=annotator,
-        roles=roles,
-    )
+    # Test continuous data download and upload
+    if test_cont:
+        dataset = "aria-noxi"
+        session = "004_2016-03-18_Paris"
+        scheme = "engagement"
+        annotator = "system"
+        roles = ["novice"]
 
-    new_annotator = "test"
-    new_annos = [
-        {"from": 0, "to": 10, "id": 1, "conf": 0.5},
-        {"from": 20, "to": 25, "id": 1, "conf": 1},
-        {"from": 30, "to": 35, "id": 1, "conf": 1},
-    ]
+        mongo_scheme = db_handler.get_schemes(dataset=dataset, schemes=[scheme])
+        annos = db_handler.get_annos(
+            dataset=dataset,
+            scheme=scheme,
+            session=session,
+            annotator=annotator,
+            roles=roles,
+        )
 
-    db_handler.set_annos(
-        dataset=dataset,
-        scheme=scheme,
-        session=session,
-        annotator=new_annotator,
-        role=roles[0],
-        annos=new_annos,
-    )
+
+    # Test categorical data download and upload
+    if test_cat:
+        dataset = "roxi"
+        session = "001"
+        scheme = "emotionalbursts"
+        annotator = "gold"
+        roles = ["player1"]
+
+        mongo_scheme = db_handler.get_schemes(dataset=dataset, schemes=[scheme])
+        annos = db_handler.get_annos(
+            dataset=dataset,
+            scheme=scheme,
+            session=session,
+            annotator=annotator,
+            roles=roles,
+        )
+
+        new_annotator = "test"
+        new_annos = [
+            {"from": 0, "to": 10, "id": 1, "conf": 0.5},
+            {"from": 20, "to": 25, "id": 1, "conf": 1},
+            {"from": 30, "to": 35, "id": 1, "conf": 1},
+        ]
+
+        db_handler.set_annos(
+            dataset=dataset,
+            scheme=scheme,
+            session=session,
+            annotator=new_annotator,
+            role=roles[0],
+            annos=new_annos,
+        )
+
 
     print("Done")

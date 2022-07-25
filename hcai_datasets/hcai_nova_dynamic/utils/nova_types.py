@@ -9,7 +9,7 @@ class DataTypes(Enum):
 
 class AnnoTypes(Enum):
   DISCRETE = 0
-  CONTINOUS = 1
+  CONTINUOUS = 1
   FREE = 2
   POINT = 3
   DISCRETE_POLYGON = 4

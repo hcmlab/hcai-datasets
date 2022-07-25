@@ -17,7 +17,7 @@ from hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils import (
 )
 from hcai_datasets.hcai_nova_dynamic.utils.nova_anno_utils import (
     DiscreteAnnotation,
-    ContinousAnnotation,
+    ContinuousAnnotation,
     FreeAnnotation,
 )
 
@@ -163,6 +163,19 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                         scheme=scheme_name,
                         is_valid=scheme_valid,
                         labels=labels,
+                    )
+
+                elif scheme_type == nt.AnnoTypes.CONTINUOUS:
+                    min_val = scheme["min"]
+                    max_val = scheme["max"]
+                    sr = scheme["sr"]
+                    label_info[label_id] = nau.ContinuousAnnotation(
+                        role=role,
+                        scheme=scheme_name,
+                        is_valid=scheme_valid,
+                        min_val= min_val,
+                        max_val= max_val,
+                        sr=sr,
                     )
 
                 elif scheme_type == nt.AnnoTypes.DISCRETE_POLYGON:
