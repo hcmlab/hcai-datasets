@@ -292,8 +292,8 @@ class ContinuousAnnotation(Annotation):
         self.data = np.array([tuple(i.values()) for i in mongo_doc])
 
     def get_label_for_frame(self, start, end):
-        s = int(start * self.sr)
-        e = int(end * self.sr)
+        s = int(start * self.sr / 1000)
+        e = int(end * self.sr / 1000)
         frame = self.data[s:e]
         frame_conf = frame[:,0]
         frame_data = frame[:,1]
