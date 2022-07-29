@@ -98,7 +98,7 @@ class HcaiNovaDynamic(HcaiNovaDynamicIterable, tfds.core.GeneratorBasedBuilder):
             # TODO: Remove frame when tfds implements option to disable shuffle
             # Adding fake framenumber label for sorting
             'frame': tf.string,
-            **{map_label_id(k): self._build_tfds_label_info(k, v) for k, v in self.label_info.items()},
+            **{map_label_id(k): self._build_tfds_label_info(k, v) for k, v in self.annos.items()},
             **{map_label_id(k): self._build_tfds_data_info(k, v) for k, v in self.data_info.items()}
         }
 
@@ -128,7 +128,7 @@ class HcaiNovaDynamic(HcaiNovaDynamicIterable, tfds.core.GeneratorBasedBuilder):
 
     def _build_tfds_label_info(self, label_key, scheme):
 
-        scheme_type = self.label_schemes[label_key]
+        scheme_type = self.anno_schemes[label_key]
 
         if scheme_type == nt.AnnoTypes.DISCRETE:
             return tfds.features.ClassLabel(names=list(scheme.labels.values()))

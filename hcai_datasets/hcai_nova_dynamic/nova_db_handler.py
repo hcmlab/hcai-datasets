@@ -341,6 +341,10 @@ class NovaDBHandler:
         )
         return ret
 
+    # TODO: Remove Restclass Labels in discrete Cases
+    # TODO: Consider "forced overwrite"
+    # TODO: Add Backup case
+    # TODO: Call preprocess of annotation
     def set_annos(
         self,
         dataset: str,
@@ -459,7 +463,8 @@ class NovaDBHandler:
             )
             if not success.acknowledged:
                 warnings.warn(
-                    f"Unexpected error uploading annotations for {dataset} - {session} - {scheme} - {annotator}. Upload failed."
+                    f"Unexpected error uploading annotations for {dataset} - {session} - {scheme} - {annotator}. "
+                    f"Upload failed. "
                 )
                 return ""
             else:
@@ -481,8 +486,8 @@ class NovaDBHandler:
 if __name__ == "__main__":
     db_handler = NovaDBHandler("../../local_data/nova_db_test.cfg")
 
-    test_cont = True
-    test_cat = False
+    test_cont = False
+    test_cat = True
 
     # Test continuous data download and upload
     if test_cont:
@@ -525,6 +530,7 @@ if __name__ == "__main__":
             {"from": 20, "to": 25, "id": 1, "conf": 1},
             {"from": 30, "to": 35, "id": 1, "conf": 1},
         ]
+
 
         db_handler.set_annos(
             dataset=dataset,
