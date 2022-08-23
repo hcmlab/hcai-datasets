@@ -307,41 +307,27 @@ class DiscretePolygonAnnotation(Annotation):
     def __init__(self, labels={}, sr=0, **kwargs):
         super().__init__(**kwargs)
         self.type = nt.AnnoTypes.DISCRETE_POLYGON
+
         self.labels = {
-            str(x["id"]): x["name"] if x["isValid"] else ""
+            str(x["id"]): (x["name"], x["color"]) if x["isValid"] else ""
             for x in sorted(labels, key=lambda k: k["id"])
         }
         self.sr = sr
-        self.dummy_label = np.full((10, 2), -1, dtype=np.float64)
 
+    # TODO MARCO type wird so für tensorflow nicht funktionieren
     def get_info(self):
-        # TODO fix, this is not right
         return merge_role_key(self.role, self.scheme), {
             "dtype": np.float64,
-            "shape": (2,),
+            "shape": (None, 2),
         }
 
     def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
         self.data = mongo_doc
 
     def get_label_for_frame(self, start, end):
-        # Use the start of the frame to determine the label
-        frame_nr = int(self.sr * start)
-
-        # Prefill array with dummy -1 labels
-        label = {str(l): self.dummy_label for l in self.labels.keys()}
-
-        # If we have any label data fill the label
-        if not self.data == -1 and len(self.data) > frame_nr:
-            for l in self.data[frame_nr]["polygons"]:
-                if str(l["label"]) in label.keys():
-                    label[str(l["label"])] = np.array(
-                        [(p["x"], p["y"]) for p in l["points"]]
-                    )
-                else:
-                    print(
-                        "Warning! Label ID {} found in annotation but not in scheme.".format(
-                            l["label"]
-                        )
-                    )
-        return label
+        # return the last frame
+        frame_nr = int((end / 1000) * self.sr)
+        if len(self.data) > frame_nr:
+            return self.data[frame_nr - 1]
+        else:
+            return -1
