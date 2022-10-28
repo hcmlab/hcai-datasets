@@ -148,7 +148,6 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
         # List of all combinations from roles and schemes that occur in the retrieved data.
         for scheme in mongo_schemes:
-            for role in self.roles:
                 label_id = merge_role_key(role=role, key=scheme["name"])
                 scheme_type = nt.string_to_enum(nt.AnnoTypes, scheme["type"])
                 scheme_name = scheme["name"]
