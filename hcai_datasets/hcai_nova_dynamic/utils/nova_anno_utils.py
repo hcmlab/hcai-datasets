@@ -279,6 +279,9 @@ class FreeAnnotation(Annotation):
     def get_label_for_frame(self, start, end):
         return self.get_label_for_frame_np(start, end)
 
+    def postprocess(self):
+        pass
+
 
 class ContinuousAnnotation(Annotation):
     def __init__(self, sr=0, min_val=0, max_val=0, **kwargs):
