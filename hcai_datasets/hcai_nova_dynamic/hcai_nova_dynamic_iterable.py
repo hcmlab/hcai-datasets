@@ -42,7 +42,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
             end=None,
             left_context="0s",
             right_context="0s",
-            frame_size="1s",
+            frame_size=None,
             stride=None,
             flatten_samples=False,
             supervised_keys=None,
@@ -82,12 +82,18 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         self.annotator = annotator
         self.left_context_ms = ndu.parse_time_string_to_ms(left_context)
         self.right_context_ms = ndu.parse_time_string_to_ms(right_context)
-        self.frame_size_ms = ndu.parse_time_string_to_ms(frame_size)
+        self.frame_size_ms = ndu.parse_time_string_to_ms(frame_size) if frame_size else None
         self.stride_ms = (
             ndu.parse_time_string_to_ms(stride) if stride else self.frame_size_ms
         )
-        self.start_ms = ndu.parse_time_string_to_ms(start) if start else 0
-        self.end_ms = ndu.parse_time_string_to_ms(end) if end else float("inf")
+        self.start_ms = ndu.parse_time_string_to_ms(start)
+        if not self.start_ms:
+            self.start_ms = 0
+
+        self.end_ms = ndu.parse_time_string_to_ms(end)
+        if not self.end_ms:
+            self.end_ms = float("inf")
+
         self.flatten_samples = flatten_samples
         self.add_rest_class = add_rest_class
         self.lazy_loading = lazy_loading
@@ -303,8 +309,14 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
             dur_ms = dur * 1000
 
+            # If framesize is not specified we return the whole session as one junk
+            if self.frame_size_ms is None:
+                self.frame_size_ms = min(dur_ms, self.end_ms - self.start_ms)
+                self.stride_ms = self.frame_size_ms
+
             # Starting position of the first frame in seconds
-            c_pos_ms = self.left_context_ms + self.start_ms
+            #c_pos_ms = self.left_context_ms + self.start_ms
+            c_pos_ms = max(self.left_context_ms, self.start_ms)
 
             # Generate samples for this session
             while c_pos_ms + self.stride_ms + self.right_context_ms <= min(
@@ -312,6 +324,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
             ):
                 frame_start_ms = c_pos_ms - self.left_context_ms
                 frame_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
+
+
                 key = (
                         session
                         + "_"

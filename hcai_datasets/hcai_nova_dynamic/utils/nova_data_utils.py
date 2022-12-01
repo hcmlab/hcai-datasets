@@ -303,3 +303,5 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
             return int(frame)
         except ValueError:
             raise ValueError("Invalid input format for frame: {}".format(frame))
+
+    print(f'WARNING: Could  not automatically parse time "{frame}" to seconds. Returning None ')
