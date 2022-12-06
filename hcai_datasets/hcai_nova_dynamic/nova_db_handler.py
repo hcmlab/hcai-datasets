@@ -8,16 +8,16 @@ from datetime import datetime
 from pymongo import MongoClient
 from pymongo.results import InsertOneResult, UpdateResult
 
-ANNOTATOR_COLLECTION = "Annotators"
-SCHEME_COLLECTION = "Schemes"
-STREAM_COLLECTION = "Streams"
-ROLE_COLLECTION = "Roles"
-ANNOTATION_COLLECTION = "Annotations"
-SESSION_COLLECTION = "Sessions"
-ANNOTATION_DATA_COLLECTION = "AnnotationData"
-
 
 class NovaDBHandler:
+    ANNOTATOR_COLLECTION = "Annotators"
+    SCHEME_COLLECTION = "Schemes"
+    STREAM_COLLECTION = "Streams"
+    ROLE_COLLECTION = "Roles"
+    ANNOTATION_COLLECTION = "Annotations"
+    SESSION_COLLECTION = "Sessions"
+    ANNOTATION_DATA_COLLECTION = "AnnotationData"
+
     def __init__(self, db_config_path=None, db_config_dict=None):
 
         # Connecting to the database
@@ -127,7 +127,7 @@ class NovaDBHandler:
         mongo_schemes = []
         for scheme in schemes:
             mongo_scheme = self.get_docs_by_prop(
-                scheme, "name", dataset, SCHEME_COLLECTION
+                scheme, "name", dataset, self.SCHEME_COLLECTION
             )
             if not mongo_scheme:
                 print(f"WARNING: No scheme {scheme} found in database for dataset {dataset}")
@@ -153,7 +153,7 @@ class NovaDBHandler:
 
         """
         mongo_session = self.get_docs_by_prop(
-            session, "name", dataset, SESSION_COLLECTION
+            session, "name", dataset, self.SESSION_COLLECTION
         )
         return mongo_session
 
@@ -176,7 +176,7 @@ class NovaDBHandler:
         mongo_streams = []
         for stream in data_streams:
             mongo_stream = self.get_docs_by_prop(
-                stream, "name", dataset, STREAM_COLLECTION
+                stream, "name", dataset, self.STREAM_COLLECTION
             )
             if not mongo_stream:
                 print("WARNING: No stream {} found in database".format(stream))
@@ -261,23 +261,23 @@ class NovaDBHandler:
 
         """
         mongo_schemes = self.get_docs_by_prop(
-            scheme, "name", dataset, SCHEME_COLLECTION
+            scheme, "name", dataset, self.SCHEME_COLLECTION
         )
         if not mongo_schemes:
             warnings.warn(f"Unknown scheme {scheme} found")
             return []
         mongo_annotators = self.get_docs_by_prop(
-            annotator, "name", dataset, ANNOTATOR_COLLECTION
+            annotator, "name", dataset, self.ANNOTATOR_COLLECTION
         )
         if not mongo_annotators:
             warnings.warn(f"Unknown annotator {annotator} found")
             return []
-        mongo_roles = self.get_docs_by_prop(roles, "name", dataset, ROLE_COLLECTION)
+        mongo_roles = self.get_docs_by_prop(roles, "name", dataset, self.ROLE_COLLECTION)
         if not mongo_roles:
             warnings.warn(f"Unknown role {roles} found")
             return []
         mongo_sessions = self.get_docs_by_prop(
-            session, "name", dataset, SESSION_COLLECTION
+            session, "name", dataset, self.SESSION_COLLECTION
         )
         if not mongo_sessions:
             warnings.warn(f"Unknown for session {session} found")
@@ -289,7 +289,7 @@ class NovaDBHandler:
             mongo_annotators,
             mongo_roles,
             dataset,
-            ANNOTATION_COLLECTION,
+            self.ANNOTATION_COLLECTION,
         )
 
         # getting the annotation data and the session name
@@ -400,7 +400,7 @@ class NovaDBHandler:
             mongo_annotator,
             mongo_role,
             database,
-            ANNOTATION_COLLECTION,
+            self.ANNOTATION_COLLECTION,
         )
 
         # Check for existing annotations
@@ -422,7 +422,7 @@ class NovaDBHandler:
             success = self.update_doc_by_prop(
                 doc=mongo_label_doc,
                 database=database,
-                collection=ANNOTATION_DATA_COLLECTION,
+                collection=self.ANNOTATION_DATA_COLLECTION,
             )
             if not success.acknowledged:
                 warnings.warn(f"Unknown error update database entries for Annotation data {mongo_data_id}")
@@ -433,7 +433,7 @@ class NovaDBHandler:
             success = self.insert_doc_by_prop(
                 doc=mongo_label_doc,
                 database=database,
-                collection=ANNOTATION_DATA_COLLECTION,
+                collection=self.ANNOTATION_DATA_COLLECTION,
             )
             if not success.acknowledged:
                 warnings.warn(f"Unexpected error uploading annotation data for {database} - {session} - {scheme} - "
@@ -457,7 +457,7 @@ class NovaDBHandler:
         if mongo_anno_id:
             mongo_anno_doc["_id"] = mongo_anno_id
             success = self.update_doc_by_prop(
-                doc=mongo_anno_doc, database=database, collection=ANNOTATION_COLLECTION
+                doc=mongo_anno_doc, database=database, collection=self.ANNOTATION_COLLECTION
             )
             if not success.acknowledged:
                 warnings.warn(
@@ -468,7 +468,7 @@ class NovaDBHandler:
                 anno_id = mongo_anno_id
         else:
             success = self.insert_doc_by_prop(
-                doc=mongo_anno_doc, database=database, collection=ANNOTATION_COLLECTION
+                doc=mongo_anno_doc, database=database, collection=self.ANNOTATION_COLLECTION
             )
             if not success.acknowledged:
                 warnings.warn(
@@ -480,7 +480,7 @@ class NovaDBHandler:
         return anno_id
 
     def get_mongo_scheme(self, scheme, database):
-        mongo_scheme = self.get_docs_by_prop(scheme, "name", database, SCHEME_COLLECTION)
+        mongo_scheme = self.get_docs_by_prop(scheme, "name", database, self.SCHEME_COLLECTION)
         if not mongo_scheme:
             warnings.warn(f"Unknown scheme {scheme} found")
             return ""
@@ -488,7 +488,7 @@ class NovaDBHandler:
         return mongo_scheme
 
     def get_mongo_annotator(self, annotator, database):
-        mongo_annotator = self.get_docs_by_prop(annotator, "name", database, ANNOTATOR_COLLECTION)
+        mongo_annotator = self.get_docs_by_prop(annotator, "name", database, self.ANNOTATOR_COLLECTION)
         if not mongo_annotator:
             warnings.warn(f"Unknown annotator {annotator} found")
             return ""
@@ -496,7 +496,7 @@ class NovaDBHandler:
         return mongo_annotator
 
     def get_mongo_role(self, role, database):
-        mongo_role = self.get_docs_by_prop(role, "name", database, ROLE_COLLECTION)
+        mongo_role = self.get_docs_by_prop(role, "name", database, self.ROLE_COLLECTION)
         if not mongo_role:
             warnings.warn(f"Unknown role {role} found")
             return ""
@@ -504,7 +504,7 @@ class NovaDBHandler:
         return mongo_role
 
     def get_mongo_session(self, session, database):
-        mongo_session = self.get_docs_by_prop(session, "name", database, SESSION_COLLECTION)
+        mongo_session = self.get_docs_by_prop(session, "name", database, self.SESSION_COLLECTION)
         if not mongo_session:
             warnings.warn(f"Unknown for session {session} found")
             return ""
@@ -515,13 +515,13 @@ class NovaDBHandler:
         while doc_id_to_remove is not None:
             remove_id = copy.deepcopy(doc_id_to_remove)
             result = self.get_fields_by_properties(doc_id_to_remove, "_id", "nextEntry", database,
-                                                   ANNOTATION_DATA_COLLECTION)
+                                                   self.ANNOTATION_DATA_COLLECTION)
             if result is not None and 'nextEntry' in result:
                 doc_id_to_remove = result['nextEntry']
             else:
                 doc_id_to_remove = None
 
-            self.delete_doc_by_prop(remove_id, "_id", database, ANNOTATION_DATA_COLLECTION)
+            self.delete_doc_by_prop(remove_id, "_id", database, self.ANNOTATION_DATA_COLLECTION)
 
     def delete_doc_by_prop(self, vals: Union[list, str], property: str, database: str, collection):
         filter = []
@@ -537,7 +537,6 @@ class NovaDBHandler:
         return self.client[database][collection].delete_one(filter)
 
     def get_data_docs_by_prop(self, vals: Union[list, str], property: str, database: str):
-        collection = ANNOTATION_DATA_COLLECTION
         filter = []
 
         if not isinstance(vals, list):
@@ -548,7 +547,7 @@ class NovaDBHandler:
 
         filter = {"$or": filter}
 
-        result = list(self.client[database][collection].find(filter))[0]
+        result = list(self.client[database][self.ANNOTATION_DATA_COLLECTION].find(filter))[0]
         if "nextEntry" in result:
             return self.merge_collections(result, database)
 
