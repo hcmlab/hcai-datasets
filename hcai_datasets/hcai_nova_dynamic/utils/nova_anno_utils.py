@@ -65,7 +65,6 @@ class Annotation(ABC):
         """
         raise NotImplementedError
 
-
     @abstractmethod
     def set_annotation_from_mongo_doc(self, session, time_to_ms=False):
         """
@@ -81,6 +80,13 @@ class Annotation(ABC):
         Args:
             start (int): Start time of the frame in milliseconds
             end (int): End time of the frame in milliseconds
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def postprocess(self):
+        """
+        Default post-processing for the respective annotation type
         """
         raise NotImplementedError
 
@@ -102,10 +108,7 @@ class DiscreteAnnotation(Annotation):
             self.labels[max(self.labels.keys()) + 1] = DiscreteAnnotation.REST
 
     def get_info(self):
-        return merge_role_key(self.role, self.scheme), {
-            "dtype": np.int32,
-            "shape": 1
-        }
+        return merge_role_key(self.role, self.scheme), {"dtype": np.int32, "shape": 1}
 
     def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
         self.data = mongo_doc
@@ -190,6 +193,10 @@ class DiscreteAnnotation(Annotation):
     def get_label_for_frame(self, start, end):
         return self.get_label_for_frame_np(start, end)
 
+    # TODO: postprocessing MINGAP -> MINDUR -> MINGAP (filter -> pack -> filter)
+    def postprocess(self):
+        pass
+
 
 class FreeAnnotation(Annotation):
     """
@@ -204,7 +211,7 @@ class FreeAnnotation(Annotation):
     def get_info(self):
         return merge_role_key(self.role, self.scheme), {
             "dtype": np.str,
-            "shape": (None,)
+            "shape": (None,),
         }
 
     def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
@@ -272,6 +279,9 @@ class FreeAnnotation(Annotation):
     def get_label_for_frame(self, start, end):
         return self.get_label_for_frame_np(start, end)
 
+    def postprocess(self):
+        pass
+
 
 class ContinuousAnnotation(Annotation):
     def __init__(self, sr=0, min_val=0, max_val=0, **kwargs):
@@ -282,10 +292,7 @@ class ContinuousAnnotation(Annotation):
         self.max_val = max_val
 
     def get_info(self):
-        return merge_role_key(self.role, self.scheme), {
-            "dtype": np.int32,
-            "shape": 1
-        }
+        return merge_role_key(self.role, self.scheme), {"dtype": np.int32, "shape": 1}
 
     def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
         # Numpy array with shape (len_data, 2) where the second dimension is a respective tuple (confidence, score)
@@ -296,8 +303,10 @@ class ContinuousAnnotation(Annotation):
         s = int(start * self.sr / 1000)
         e = int(end * self.sr / 1000)
         frame = self.data[s:e]
-        frame_conf = frame[:,0]
-        frame_data = frame[:,1]
+        frame_conf = frame[:, 0]
+        frame_data = frame[:, 1]
+
+        # TODO: Return timeseries instead of average
         conf = sum(frame_conf) / max(len(frame_conf), 1)
         label = sum(frame_data) / max(len(frame_data), 1)
         return label

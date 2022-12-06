@@ -361,6 +361,10 @@ class NovaDBHandler:
         )
         return ret
 
+    # TODO: Remove Restclass Labels in discrete Cases
+    # TODO: Consider "forced overwrite"
+    # TODO: Add Backup case
+    # TODO: Call preprocess of annotation
     def set_annos(
             self,
             database: str,
@@ -369,6 +373,8 @@ class NovaDBHandler:
             annotator: str,
             role: str,
             annos: list,
+            is_finished: bool = False,
+            is_locked: bool = False,
     ) -> str:
         """
         Uploading annotations to the database
@@ -443,8 +449,8 @@ class NovaDBHandler:
             "role_id": mongo_role[0]["_id"],
             "scheme_id": mongo_scheme[0]["_id"],
             "session_id": mongo_session[0]["_id"],
-            "isFinished": True,
-            "isLocked": True,
+            "isFinished": is_finished,
+            "isLocked": is_locked,
             "date": datetime.today().replace(microsecond=0),
         }
 
@@ -509,7 +515,7 @@ class NovaDBHandler:
         while doc_id_to_remove is not None:
             remove_id = copy.deepcopy(doc_id_to_remove)
             result = self.get_fields_by_properties(doc_id_to_remove, "_id", "nextEntry", database,
-                                                             ANNOTATION_DATA_COLLECTION)
+                                                   ANNOTATION_DATA_COLLECTION)
             if result is not None and 'nextEntry' in result:
                 doc_id_to_remove = result['nextEntry']
             else:
@@ -578,10 +584,11 @@ class NovaDBHandler:
 
 
 if __name__ == "__main__":
-    db_handler = NovaDBHandler("../../local_data/nova_db_test.cfg")
+    db_handler = NovaDBHandler("../../local/nova_db_test.cfg")
 
-    test_cont = True
+    test_cont = False
     test_cat = False
+    test_free = True
 
     # Test continuous data download and upload
     if test_cont:
@@ -599,7 +606,6 @@ if __name__ == "__main__":
             annotator=annotator,
             roles=roles,
         )
-
 
     # Test categorical data download and upload
     if test_cat:
@@ -634,5 +640,37 @@ if __name__ == "__main__":
             annos=new_annos,
         )
 
+    # Test free label download and upload
+    if test_free:
+        dataset = "kassel_therapie_korpus"
+        session = "OPD_102"
+        scheme = "transcript"
+        annotator = "system"
+        roles = ["therapist"]
+
+        mongo_scheme = db_handler.get_schemes(dataset=dataset, schemes=[scheme])
+        annos = db_handler.get_annos(
+            dataset=dataset,
+            scheme=scheme,
+            session=session,
+            annotator=annotator,
+            roles=roles,
+        )
+
+        new_annotator = "schildom"
+        new_annos = [
+            {"from": 0, "to": 10, "conf": 1, "name": 'das'},
+            {"from": 20, "to": 25, "conf": 1, "name": 'geht'},
+            {"from": 30, "to": 35, "conf": 1, "name": 'ja'},
+        ]
+
+        db_handler.set_annos(
+            dataset=dataset,
+            scheme=scheme,
+            session=session,
+            annotator=new_annotator,
+            role=roles[0],
+            annos=new_annos,
+        )
 
     print("Done")

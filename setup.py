@@ -55,6 +55,7 @@ setup(
         "Programming Language :: Python :: 3 :: Only",
     ],
     packages=find_packages(),
+    include_package_data=True,
     python_requires=">=3.6, <4",
     install_requires=[
         "pymongo==3.12",

@@ -40,9 +40,9 @@ class HcaiNovaDynamicIterable(DatasetIterable):
             data_streams=None,
             start=None,
             end=None,
-            left_context="0",
-            right_context="0",
-            frame_size="1",
+            left_context="0s",
+            right_context="0s",
+            frame_size=None,
             stride=None,
             flatten_samples=False,
             supervised_keys=None,
@@ -82,12 +82,18 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         self.annotator = annotator
         self.left_context_ms = ndu.parse_time_string_to_ms(left_context)
         self.right_context_ms = ndu.parse_time_string_to_ms(right_context)
-        self.frame_size_ms = ndu.parse_time_string_to_ms(frame_size)
+        self.frame_size_ms = ndu.parse_time_string_to_ms(frame_size) if frame_size else None
         self.stride_ms = (
             ndu.parse_time_string_to_ms(stride) if stride else self.frame_size_ms
         )
-        self.start_ms = ndu.parse_time_string_to_ms(start) if start else 0
-        self.end_ms = ndu.parse_time_string_to_ms(end) if end else float("inf")
+        self.start_ms = ndu.parse_time_string_to_ms(start)
+        if not self.start_ms:
+            self.start_ms = 0
+
+        self.end_ms = ndu.parse_time_string_to_ms(end)
+        if not self.end_ms:
+            self.end_ms = float("inf")
+
         self.flatten_samples = flatten_samples
         self.add_rest_class = add_rest_class
         self.lazy_loading = lazy_loading
@@ -100,7 +106,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         mongo_data = self.nova_db_handler.get_data_streams(
             dataset=dataset, data_streams=data_streams
         )
-        self.label_info, self.label_schemes = self._populate_label_info_from_mongo_doc(mongo_schemes)
+        self.annos, self.anno_schemes = self._populate_label_info_from_mongo_doc(mongo_schemes)
         self.data_info, self.data_schemes = self._populate_data_info_from_mongo_doc(mongo_data)
 
         # setting supervised keys
@@ -136,15 +142,15 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
     def _populate_label_info_from_mongo_doc(self, mongo_schemes):
         """
-        Setting self.label_info
+        Setting self.annos
         Args:
           mongo_schemes:
 
         Returns:
 
         """
-        label_info = {}
-        label_schemes = {}
+        annos = {}
+        anno_schemes = {}
 
         # List of all combinations from roles and schemes that occur in the retrieved data.
         for scheme in mongo_schemes:
@@ -153,11 +159,11 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 scheme_type = nt.string_to_enum(nt.AnnoTypes, scheme["type"])
                 scheme_name = scheme["name"]
                 scheme_valid = scheme["isValid"]
-                label_schemes[label_id] = scheme_type
+                anno_schemes[label_id] = scheme_type
 
                 if scheme_type == nt.AnnoTypes.DISCRETE:
                     labels = scheme["labels"]
-                    label_info[label_id] = nau.DiscreteAnnotation(
+                    annos[label_id] = nau.DiscreteAnnotation(
                         role=role,
                         add_rest_class=True,
                         scheme=scheme_name,
@@ -169,7 +175,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     min_val = scheme["min"]
                     max_val = scheme["max"]
                     sr = scheme["sr"]
-                    label_info[label_id] = nau.ContinuousAnnotation(
+                    annos[label_id] = nau.ContinuousAnnotation(
                         role=role,
                         scheme=scheme_name,
                         is_valid=scheme_valid,
@@ -181,7 +187,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 elif scheme_type == nt.AnnoTypes.DISCRETE_POLYGON:
                     labels = scheme["labels"]
                     sr = scheme["sr"]
-                    label_info[label_id] = nau.DiscretePolygonAnnotation(
+                    annos[label_id] = nau.DiscretePolygonAnnotation(
                         role=role,
                         scheme=scheme_name,
                         is_valid=scheme_valid,
@@ -190,14 +196,14 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     )
 
                 elif scheme_type == nt.AnnoTypes.FREE:
-                    label_info[label_id] = nau.FreeAnnotation(
+                    annos[label_id] = nau.FreeAnnotation(
                         role=role, scheme=scheme_name, is_valid=scheme_valid
                     )
 
                 else:
                     raise ValueError("Invalid label type {}".format(scheme["type"]))
 
-        return label_info, label_schemes
+        return annos, anno_schemes
 
     def _populate_data_info_from_mongo_doc(self, mongo_data_streams):
         """
@@ -265,7 +271,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         return data_info, data_schemes
 
     def _load_annotation_for_session(self, session, time_to_ms=False):
-        for label_id, anno in self.label_info.items():
+        for label_id, anno in self.annos.items():
             mongo_anno = self.nova_db_handler.get_annos(
                 self.dataset, anno.scheme, session, self.annotator, anno.role
             )
@@ -303,8 +309,14 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
             dur_ms = int(dur * 1000)
 
+            # If framesize is not specified we return the whole session as one junk
+            if self.frame_size_ms is None:
+                self.frame_size_ms = min(dur_ms, self.end_ms - self.start_ms)
+                self.stride_ms = self.frame_size_ms
+
             # Starting position of the first frame in seconds
-            c_pos_ms = self.left_context_ms + self.start_ms
+            #c_pos_ms = self.left_context_ms + self.start_ms
+            c_pos_ms = max(self.left_context_ms, self.start_ms)
 
             # Generate samples for this session
             while c_pos_ms + self.stride_ms + self.right_context_ms <= min(
@@ -312,6 +324,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
             ):
                 frame_start_ms = c_pos_ms - self.left_context_ms
                 frame_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
+
+
                 key = (
                         session
                         + "_"
@@ -322,7 +336,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
                 labels_for_frame = [
                     {k: v.get_label_for_frame(frame_start_ms, frame_end_ms)}
-                    for k, v in self.label_info.items()
+                    for k, v in self.annos.items()
                 ]
                 data_for_frame = []
 
@@ -393,7 +407,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         return {
                     # Adding fake framenumber label for sorting
                     'frame': {"dtype":np.str, "shape":(1,)},
-                    **{map_label_id(k): v.get_info()[1] for k, v in self.label_info.items()},
+                    **{map_label_id(k): v.get_info()[1] for k, v in self.annos.items()},
                     **{map_label_id(k): v.get_info()[1] for k, v in self.data_info.items()}
                 }
 
