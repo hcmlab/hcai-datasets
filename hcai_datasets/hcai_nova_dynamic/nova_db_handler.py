@@ -1,10 +1,12 @@
-import configparser
 import os
+import copy
 import warnings
+import configparser
+
+from typing import Union
 from datetime import datetime
 from pymongo import MongoClient
 from pymongo.results import InsertOneResult, UpdateResult
-from typing import Union
 
 ANNOTATOR_COLLECTION = "Annotators"
 SCHEME_COLLECTION = "Schemes"
@@ -73,7 +75,7 @@ class NovaDBHandler:
 
     # Reading from database
     def get_docs_by_prop(
-        self, vals: Union[list, str], property: str, database: str, collection: str
+            self, vals: Union[list, str], property: str, database: str, collection: str
     ) -> list:
         """
         Fetching a document from the mongo db collection in the respective database where the passed values are matching a specific property in the collection.
@@ -187,13 +189,13 @@ class NovaDBHandler:
         return mongo_streams
 
     def get_annotation_docs(
-        self,
-        mongo_schemes,
-        mongo_sessions,
-        mongo_annotators,
-        mongo_roles,
-        database,
-        collection,
+            self,
+            mongo_schemes,
+            mongo_sessions,
+            mongo_annotators,
+            mongo_roles,
+            database,
+            collection,
     ):
         """
         Fetches all annotationobjects that match the specified criteria from the nova database
@@ -239,12 +241,12 @@ class NovaDBHandler:
         return ret
 
     def get_annos(
-        self,
-        dataset: str,
-        scheme: str,
-        session: str,
-        annotator: str,
-        roles: Union[list, str],
+            self,
+            dataset: str,
+            scheme: str,
+            session: str,
+            annotator: str,
+            roles: Union[list, str],
     ) -> list:
         """
         Fetches all annotations that matches the specified criteria from the nova database and returns them as a list of python readable dictionaries.
@@ -299,16 +301,15 @@ class NovaDBHandler:
 
         else:
             # TODO: adapt for multiple roles, annotators etc.
-            label = self.get_docs_by_prop(
-                mongo_annos[0]["data_id"], "_id", dataset, ANNOTATION_DATA_COLLECTION
+            label = self.get_data_docs_by_prop(
+                mongo_annos[0]["data_id"], "_id", dataset
             )
-            label = label[0]["labels"]
+            label = label["labels"]
 
         return label
 
-    # Writing to database
     def insert_doc_by_prop(
-        self, doc: dict, database: str, collection: str
+            self, doc: dict, database: str, collection: str
     ) -> InsertOneResult:
         """
         Uploading a document to the database using the specificed parameters
@@ -324,7 +325,7 @@ class NovaDBHandler:
         return ret
 
     def update_doc_by_prop(
-        self, doc: dict, database: str, collection: str
+            self, doc: dict, database: str, collection: str
     ) -> UpdateResult:
         """
         Uploading a document to the database using the specificed parameters
@@ -341,14 +342,33 @@ class NovaDBHandler:
         )
         return ret
 
+    def update_doc_by_id(
+            self, _id: str, doc: dict, database: str, collection: str
+    ) -> UpdateResult:
+        """
+        Uploading a document to the database using the specificed parameters
+        Args:
+          _id: ID of doc, which has to be updated
+          docs: List of dictionaries with objects to upload to the database
+          database: The name of the database to search
+          collection: The name of the collection within the database to search
+
+        Returns:
+          str: ObjectID of the inserted objects or an empty list in case of failure
+        """
+        ret = self.client[database][collection].update_one(
+            {"_id": _id}, {"$set": doc}
+        )
+        return ret
+
     def set_annos(
-        self,
-        dataset: str,
-        scheme: str,
-        session: str,
-        annotator: str,
-        role: str,
-        annos: list,
+            self,
+            database: str,
+            scheme: str,
+            session: str,
+            annotator: str,
+            role: str,
+            annos: list,
     ) -> str:
         """
         Uploading annotations to the database
@@ -362,28 +382,10 @@ class NovaDBHandler:
 
         Returns: Object ID of the inserted annotations. Empty string in case of failure
         """
-        mongo_scheme = self.get_docs_by_prop(scheme, "name", dataset, SCHEME_COLLECTION)
-        if not mongo_scheme:
-            warnings.warn(f"Unknown scheme {scheme} found")
-            return ""
-
-        mongo_annotator = self.get_docs_by_prop(
-            annotator, "name", dataset, ANNOTATOR_COLLECTION
-        )
-        if not mongo_annotator:
-            warnings.warn(f"Unknown annotator {annotator} found")
-            return ""
-
-        mongo_role = self.get_docs_by_prop(role, "name", dataset, ROLE_COLLECTION)
-        if not mongo_role:
-            warnings.warn(f"Unknown role {roles} found")
-            return ""
-        mongo_session = self.get_docs_by_prop(
-            session, "name", dataset, SESSION_COLLECTION
-        )
-        if not mongo_session:
-            warnings.warn(f"Unknown for session {session} found")
-            return ""
+        mongo_scheme = self.get_mongo_scheme(scheme, database)
+        mongo_annotator = self.get_mongo_annotator(annotator, database)
+        mongo_role = self.get_mongo_role(role, database)
+        mongo_session = self.get_mongo_session(session, database)
 
         # Check if annotations already exist
         mongo_annos = self.get_annotation_docs(
@@ -391,7 +393,7 @@ class NovaDBHandler:
             mongo_session,
             mongo_annotator,
             mongo_role,
-            dataset,
+            database,
             ANNOTATION_COLLECTION,
         )
 
@@ -400,14 +402,10 @@ class NovaDBHandler:
         mongo_data_id = None
         if mongo_annos:
             if mongo_annos[0]["isLocked"]:
-                warnings.warn(
-                    f"Can't overwrite locked annotation {str(mongo_annos[0]['_id'])}"
-                )
+                warnings.warn(f"Can't overwrite locked annotation {str(mongo_annos[0]['_id'])}")
                 return ""
             else:
-                warnings.warn(
-                    f"Overwriting existing annotation {str(mongo_annos[0]['_id'])}"
-                )
+                warnings.warn(f"Overwriting existing annotation {str(mongo_annos[0]['_id'])}")
                 mongo_anno_id = mongo_annos[0]["_id"]
                 mongo_data_id = mongo_annos[0]["data_id"]
 
@@ -417,26 +415,23 @@ class NovaDBHandler:
             mongo_label_doc["_id"] = mongo_data_id
             success = self.update_doc_by_prop(
                 doc=mongo_label_doc,
-                database=dataset,
+                database=database,
                 collection=ANNOTATION_DATA_COLLECTION,
             )
             if not success.acknowledged:
-                warnings.warn(
-                    f"Unknown error update database entries for Annotation data {mongo_data_id}"
-                )
+                warnings.warn(f"Unknown error update database entries for Annotation data {mongo_data_id}")
                 return ""
             else:
                 data_id = mongo_data_id
         else:
             success = self.insert_doc_by_prop(
                 doc=mongo_label_doc,
-                database=dataset,
+                database=database,
                 collection=ANNOTATION_DATA_COLLECTION,
             )
             if not success.acknowledged:
-                warnings.warn(
-                    f"Unexpected error uploading annotation data for {dataset} - {session} - {scheme} - {annotator}. Upload failed."
-                )
+                warnings.warn(f"Unexpected error uploading annotation data for {database} - {session} - {scheme} - "
+                              f"{annotator}. Upload failed.")
                 return ""
             else:
                 data_id = success.inserted_id
@@ -452,30 +447,134 @@ class NovaDBHandler:
             "isLocked": True,
             "date": datetime.today().replace(microsecond=0),
         }
+
         if mongo_anno_id:
             mongo_anno_doc["_id"] = mongo_anno_id
             success = self.update_doc_by_prop(
-                doc=mongo_anno_doc, database=dataset, collection=ANNOTATION_COLLECTION
+                doc=mongo_anno_doc, database=database, collection=ANNOTATION_COLLECTION
             )
             if not success.acknowledged:
                 warnings.warn(
-                    f"Unexpected error uploading annotations for {dataset} - {session} - {scheme} - {annotator}. Upload failed."
+                    f"Unexpected error uploading annotations for {database} - {session} - {scheme} - {annotator}. Upload failed."
                 )
                 return ""
             else:
                 anno_id = mongo_anno_id
         else:
             success = self.insert_doc_by_prop(
-                doc=mongo_anno_doc, database=dataset, collection=ANNOTATION_COLLECTION
+                doc=mongo_anno_doc, database=database, collection=ANNOTATION_COLLECTION
             )
             if not success.acknowledged:
                 warnings.warn(
-                    f"Unexpected error uploading annotations for {dataset} - {session} - {scheme} - {annotator}. Upload failed."
+                    f"Unexpected error uploading annotations for {database} - {session} - {scheme} - {annotator}. Upload failed."
                 )
                 return ""
             else:
                 anno_id = success.inserted_id
         return anno_id
+
+    def get_mongo_scheme(self, scheme, database):
+        mongo_scheme = self.get_docs_by_prop(scheme, "name", database, SCHEME_COLLECTION)
+        if not mongo_scheme:
+            warnings.warn(f"Unknown scheme {scheme} found")
+            return ""
+
+        return mongo_scheme
+
+    def get_mongo_annotator(self, annotator, database):
+        mongo_annotator = self.get_docs_by_prop(annotator, "name", database, ANNOTATOR_COLLECTION)
+        if not mongo_annotator:
+            warnings.warn(f"Unknown annotator {annotator} found")
+            return ""
+
+        return mongo_annotator
+
+    def get_mongo_role(self, role, database):
+        mongo_role = self.get_docs_by_prop(role, "name", database, ROLE_COLLECTION)
+        if not mongo_role:
+            warnings.warn(f"Unknown role {role} found")
+            return ""
+
+        return mongo_role
+
+    def get_mongo_session(self, session, database):
+        mongo_session = self.get_docs_by_prop(session, "name", database, SESSION_COLLECTION)
+        if not mongo_session:
+            warnings.warn(f"Unknown for session {session} found")
+            return ""
+
+        return mongo_session
+
+    def delete_doc_with_tail(self, doc_id_to_remove, database):
+        while doc_id_to_remove is not None:
+            remove_id = copy.deepcopy(doc_id_to_remove)
+            result = self.get_fields_by_properties(doc_id_to_remove, "_id", "nextEntry", database,
+                                                             ANNOTATION_DATA_COLLECTION)
+            if result is not None and 'nextEntry' in result:
+                doc_id_to_remove = result['nextEntry']
+            else:
+                doc_id_to_remove = None
+
+            self.delete_doc_by_prop(remove_id, "_id", database, ANNOTATION_DATA_COLLECTION)
+
+    def delete_doc_by_prop(self, vals: Union[list, str], property: str, database: str, collection):
+        filter = []
+
+        if not isinstance(vals, list):
+            vals = [vals]
+
+        for n in vals:
+            filter.append({property: n})
+
+        filter = {"$and": filter}
+
+        return self.client[database][collection].delete_one(filter)
+
+    def get_data_docs_by_prop(self, vals: Union[list, str], property: str, database: str):
+        collection = ANNOTATION_DATA_COLLECTION
+        filter = []
+
+        if not isinstance(vals, list):
+            vals = [vals]
+
+        for n in vals:
+            filter.append({property: n})
+
+        filter = {"$or": filter}
+
+        result = list(self.client[database][collection].find(filter))[0]
+        if "nextEntry" in result:
+            return self.merge_collections(result, database)
+
+        return result
+
+    def get_fields_by_properties(self, vals: Union[list, str], property, fields: Union[list, str], database: str,
+                                 collection: str):
+        filter = []
+        fields_dict = {}
+
+        if not isinstance(fields, list):
+            fields = [fields]
+
+        for n in fields:
+            fields_dict[n] = 1
+
+        if not isinstance(vals, list):
+            vals = [vals]
+
+        for n in vals:
+            filter.append({property: n})
+
+        filter = {"$or": filter}
+
+        return self.client[database][collection].find_one(filter, fields_dict)
+
+    def merge_collections(self, doc, database):
+        next_id = doc["nextEntry"]
+        new_doc = self.get_data_docs_by_prop(next_id, "_id", database)
+        doc['labels'] += new_doc['labels']
+
+        return doc
 
 
 if __name__ == "__main__":
