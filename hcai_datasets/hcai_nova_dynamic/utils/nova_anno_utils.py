@@ -311,6 +311,9 @@ class ContinuousAnnotation(Annotation):
         label = sum(frame_data) / max(len(frame_data), 1)
         return label
 
+    def postprocess(self):
+        pass
+
 
 class DiscretePolygonAnnotation(Annotation):
     def __init__(self, labels={}, sr=0, **kwargs):
@@ -340,3 +343,6 @@ class DiscretePolygonAnnotation(Annotation):
             return self.data[frame_nr - 1]
         else:
             return -1
+
+    def postprocess(self):
+        pass
