@@ -295,7 +295,7 @@ class NovaDBHandler:
         # getting the annotation data and the session name
         if not mongo_annos:
             print(
-                f"No annotions found for \n\t-annotator: {annotator}\n\t-scheme: {scheme}\n\t-session: {session}\n\t-role: {roles}"
+                f"No annotations found for \n\t-annotator: {annotator}\n\t-scheme: {scheme}\n\t-session: {session}\n\t-role: {roles}"
             )
             return []
 
