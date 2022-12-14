@@ -114,8 +114,8 @@ class DiscreteAnnotation(Annotation):
         self.data = mongo_doc
         if time_to_ms:
             for d in self.data:
-                d["from"] = int(d["from"] * 1000)
-                d["to"] = int(d["to"] * 1000)
+                d["from"] = int(float(d["from"]) * 1000)
+                d["to"] = int(float(d["to"]) * 1000)
 
         # Creating Pandas Dataframe version of annotations
         self.dataframe = pd.DataFrame(self.data)
