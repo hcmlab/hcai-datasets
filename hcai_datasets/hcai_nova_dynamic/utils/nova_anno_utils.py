@@ -29,7 +29,6 @@ def _get_overlap(a, start, end):
     return annos_for_sample
 
 
-@njit
 def _get_anno_majority(a, overlap_idxs, start, end):
     """
     Returns the index of the annotation with the largest overlap with the current frame
@@ -42,10 +41,13 @@ def _get_anno_majority(a, overlap_idxs, start, end):
     Returns:
 
     """
-    majority_index = np.argmax(
-        np.minimum(a[overlap_idxs][:, 1], end)
-        - np.maximum(a[overlap_idxs][:, 0], start)
-    )
+    # TODO: rewrite for numba jit
+    majority_index = -1
+    overlap = 0
+    for i in np.where(overlap_idxs)[0]:
+        if (cur_overlap := np.minimum(end, a[i][1]) - np.maximum(start, a[i][0])) > overlap:
+            overlap = cur_overlap
+            majority_index = i
     return majority_index
 
 
@@ -188,7 +190,7 @@ class DiscreteAnnotation(Annotation):
 
         majority_idx = _get_anno_majority(self.data_interval, overlap_idxs, start, end)
 
-        return self.data_values[majority_idx, 0]
+        return int(self.data_values[majority_idx, 0])
 
     def get_label_for_frame(self, start, end):
         return self.get_label_for_frame_np(start, end)
