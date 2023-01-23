@@ -267,7 +267,7 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
     # if frame is specified milliseconds as string
     if str(frame).endswith("ms"):
         try:
-            return int(frame[:-2])
+            return float(frame[:-2])
         except ValueError:
             raise ValueError(
                 "Invalid input format for frame in milliseconds: {}".format(frame)
