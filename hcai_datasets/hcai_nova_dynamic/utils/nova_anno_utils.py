@@ -292,6 +292,7 @@ class ContinuousAnnotation(Annotation):
         self.sr = sr
         self.min_val = min_val
         self.max_val = max_val
+        self.labels = {1: self.scheme}
 
     def get_info(self):
         return merge_role_key(self.role, self.scheme), {"dtype": np.int32, "shape": 1}
@@ -304,9 +305,13 @@ class ContinuousAnnotation(Annotation):
         # returns zero if session duration is longer then labels
         s = int(start * self.sr / 1000)
         e = int(end * self.sr / 1000)
-        frame = self.data[s:e]
-        frame_conf = frame[:, 0]
-        frame_data = frame[:, 1]
+
+        if len(self.data) >= e:
+            frame = self.data[s:e]
+            frame_conf = frame[:, 0]
+            frame_data = frame[:, 1]
+        else:
+            return -1
 
         # TODO: Return timeseries instead of average
         conf = sum(frame_conf) / max(len(frame_conf), 1)
