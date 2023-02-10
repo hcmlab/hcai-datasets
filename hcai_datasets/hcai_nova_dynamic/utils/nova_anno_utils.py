@@ -308,8 +308,8 @@ class ContinuousAnnotation(Annotation):
 
         if len(self.data) >= e:
             frame = self.data[s:e]
-            frame_conf = frame[:, 0]
-            frame_data = frame[:, 1]
+            frame_data = frame[:, 0]
+            frame_conf = frame[:, 1]
         else:
             return -1
 
