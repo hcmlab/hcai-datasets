@@ -29,7 +29,6 @@ def _get_overlap(a, start, end):
     return annos_for_sample
 
 
-@njit
 def _get_anno_majority(a, overlap_idxs, start, end):
     """
     Returns the index of the annotation with the largest overlap with the current frame
@@ -42,10 +41,13 @@ def _get_anno_majority(a, overlap_idxs, start, end):
     Returns:
 
     """
-    majority_index = np.argmax(
-        np.minimum(a[overlap_idxs][:, 1], end)
-        - np.maximum(a[overlap_idxs][:, 0], start)
-    )
+    # TODO: rewrite for numba jit
+    majority_index = -1
+    overlap = 0
+    for i in np.where(overlap_idxs)[0]:
+        if (cur_overlap := np.minimum(end, a[i][1]) - np.maximum(start, a[i][0])) > overlap:
+            overlap = cur_overlap
+            majority_index = i
     return majority_index
 
 
@@ -114,8 +116,8 @@ class DiscreteAnnotation(Annotation):
         self.data = mongo_doc
         if time_to_ms:
             for d in self.data:
-                d["from"] = int(d["from"] * 1000)
-                d["to"] = int(d["to"] * 1000)
+                d["from"] = int(float(d["from"]) * 1000)
+                d["to"] = int(float(d["to"]) * 1000)
 
         # Creating Pandas Dataframe version of annotations
         self.dataframe = pd.DataFrame(self.data)
@@ -188,7 +190,7 @@ class DiscreteAnnotation(Annotation):
 
         majority_idx = _get_anno_majority(self.data_interval, overlap_idxs, start, end)
 
-        return self.data_values[majority_idx, 0]
+        return int(self.data_values[majority_idx, 0])
 
     def get_label_for_frame(self, start, end):
         return self.get_label_for_frame_np(start, end)
@@ -290,6 +292,7 @@ class ContinuousAnnotation(Annotation):
         self.sr = sr
         self.min_val = min_val
         self.max_val = max_val
+        self.labels = {1: self.scheme}
 
     def get_info(self):
         return merge_role_key(self.role, self.scheme), {"dtype": np.int32, "shape": 1}
@@ -302,55 +305,51 @@ class ContinuousAnnotation(Annotation):
         # returns zero if session duration is longer then labels
         s = int(start * self.sr / 1000)
         e = int(end * self.sr / 1000)
-        frame = self.data[s:e]
-        frame_conf = frame[:, 0]
-        frame_data = frame[:, 1]
+
+        if len(self.data) >= e:
+            frame = self.data[s:e]
+            frame_data = frame[:, 0]
+            frame_conf = frame[:, 1]
+        else:
+            return -1
 
         # TODO: Return timeseries instead of average
         conf = sum(frame_conf) / max(len(frame_conf), 1)
         label = sum(frame_data) / max(len(frame_data), 1)
         return label
 
+    def postprocess(self):
+        pass
+
 
 class DiscretePolygonAnnotation(Annotation):
     def __init__(self, labels={}, sr=0, **kwargs):
         super().__init__(**kwargs)
         self.type = nt.AnnoTypes.DISCRETE_POLYGON
+
         self.labels = {
-            str(x["id"]): x["name"] if x["isValid"] else ""
+            str(x["id"]): (x["name"], x["color"]) if x["isValid"] else ""
             for x in sorted(labels, key=lambda k: k["id"])
         }
         self.sr = sr
-        self.dummy_label = np.full((10, 2), -1, dtype=np.float64)
 
+    # TODO MARCO type wird so für tensorflow nicht funktionieren
     def get_info(self):
-        # TODO fix, this is not right
         return merge_role_key(self.role, self.scheme), {
             "dtype": np.float64,
-            "shape": (2,),
+            "shape": (None, 2),
         }
 
     def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
         self.data = mongo_doc
 
     def get_label_for_frame(self, start, end):
-        # Use the start of the frame to determine the label
-        frame_nr = int(self.sr * start)
+        # return the last frame
+        frame_nr = int((end / 1000) * self.sr)
+        if len(self.data) > frame_nr:
+            return self.data[frame_nr - 1]
+        else:
+            return -1
 
-        # Prefill array with dummy -1 labels
-        label = {str(l): self.dummy_label for l in self.labels.keys()}
-
-        # If we have any label data fill the label
-        if not self.data == -1 and len(self.data) > frame_nr:
-            for l in self.data[frame_nr]["polygons"]:
-                if str(l["label"]) in label.keys():
-                    label[str(l["label"])] = np.array(
-                        [(p["x"], p["y"]) for p in l["points"]]
-                    )
-                else:
-                    print(
-                        "Warning! Label ID {} found in annotation but not in scheme.".format(
-                            l["label"]
-                        )
-                    )
-        return label
+    def postprocess(self):
+        pass

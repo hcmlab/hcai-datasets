@@ -30,6 +30,7 @@ If you want to install the project on other architecture you will need to compil
 ![uml diagram](image/architecture.png)
 
 Dataset implementations are split into two parts.\
+
 Data access is handled by a generic python iterable, implemented by the DatasetIterable interface.\
 The access class is then extended by an API class, which implements tfds.core.GeneratorBasedBuilder.
 This results in the dataset being available by the Tensorflow Datasets API, and enables features 

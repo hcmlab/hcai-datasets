@@ -302,12 +302,12 @@ class HcaiNovaDynamicIterable(DatasetIterable):
             dur = session_info["duration"]
             # If are loading any datastreams we check if any datastream is shorter than the duration stored in the database suggests
             if self.data_info:
-                dur = int(min(*[v.dur for k, v in self.data_info.items()], dur))
+                dur = min(*[v.dur for k, v in self.data_info.items()], dur)
 
             if not dur:
                 raise ValueError("Session {} has no duration.".format(session))
 
-            dur_ms = dur * 1000
+            dur_ms = int(dur * 1000)
 
             # If framesize is not specified we return the whole session as one junk
             if self.frame_size_ms is None:
