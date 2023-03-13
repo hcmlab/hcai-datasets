@@ -63,9 +63,9 @@ setup(
         "decord;platform_machine=='AMD64'",
         "torch",
         "numba",
-        "tensorflow>=2.7;platform_system=='windows'",
-        "tensorflow>=2.7;platform_system=='linux'",
-        "tensorflow-macos>=2.7;platform_system=='darwin'",
+        "tensorflow>=2.7;sys_platform == 'win32'",
+        "tensorflow>=2.7;platform_system=='Linux'",
+        "tensorflow-macos>=2.7;platform_system=='Darwin'",
         "tensorflow-datasets",
     ],
 )
