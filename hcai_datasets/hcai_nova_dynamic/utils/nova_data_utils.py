@@ -1,4 +1,3 @@
-import cv2
 from decord import VideoReader, AudioReader, cpu
 import numpy as np
 import os
