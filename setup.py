@@ -59,12 +59,12 @@ setup(
     python_requires=">=3.6, <4",
     install_requires=[
         "pymongo==3.12",
-        "opencv-python",
         "decord;platform_machine=='AMD64'",
-        "torch",
         "numba",
-        "tensorflow==2.7",
-        "tensorflow-datasets==4.4.0",
         "pandas==1.4"
     ],
+    extras_require={
+        "torch": ["torch"],
+        "tf" : [  "tensorflow==2.7", "tensorflow-datasets==4.4.0"]
+    }
 )
