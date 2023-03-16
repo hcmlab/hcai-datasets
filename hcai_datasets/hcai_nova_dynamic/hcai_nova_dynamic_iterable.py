@@ -27,28 +27,28 @@ from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import *
 
 class HcaiNovaDynamicIterable(DatasetIterable):
     def __init__(
-            self,
-            *,
-            db_config_path=None,
-            db_config_dict=None,
-            dataset=None,
-            nova_data_dir=None,
-            sessions=None,
-            annotator=None,
-            schemes=None,
-            roles=None,
-            data_streams=None,
-            start=None,
-            end=None,
-            left_context="0s",
-            right_context="0s",
-            frame_size=None,
-            stride=None,
-            flatten_samples=False,
-            supervised_keys=None,
-            add_rest_class=True,
-            lazy_loading=False,
-            **kwargs
+        self,
+        *,
+        db_config_path=None,
+        db_config_dict=None,
+        dataset=None,
+        nova_data_dir=None,
+        sessions=None,
+        annotator=None,
+        schemes=None,
+        roles=None,
+        data_streams=None,
+        start=None,
+        end=None,
+        left_context="0s",
+        right_context="0s",
+        frame_size=None,
+        stride=None,
+        flatten_samples=False,
+        supervised_keys=None,
+        add_rest_class=True,
+        lazy_loading=False,
+        **kwargs,
     ):
         """
         Initialize the HcaiNovaDynamic dataset builder
@@ -82,7 +82,9 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         self.annotator = annotator
         self.left_context_ms = ndu.parse_time_string_to_ms(left_context)
         self.right_context_ms = ndu.parse_time_string_to_ms(right_context)
-        self.frame_size_ms = ndu.parse_time_string_to_ms(frame_size) if frame_size else None
+        self.frame_size_ms = (
+            ndu.parse_time_string_to_ms(frame_size) if frame_size else None
+        )
         self.stride_ms = (
             ndu.parse_time_string_to_ms(stride) if stride else self.frame_size_ms
         )
@@ -106,8 +108,12 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         mongo_data = self.nova_db_handler.get_data_streams(
             dataset=dataset, data_streams=data_streams
         )
-        self.annos, self.anno_schemes = self._populate_label_info_from_mongo_doc(mongo_schemes)
-        self.data_info, self.data_schemes = self._populate_data_info_from_mongo_doc(mongo_data)
+        self.annos, self.anno_schemes = self._populate_label_info_from_mongo_doc(
+            mongo_schemes
+        )
+        self.data_info, self.data_schemes = self._populate_data_info_from_mongo_doc(
+            mongo_data
+        )
 
         # setting supervised keys
         if supervised_keys and self.flatten_samples:
@@ -179,8 +185,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                         role=role,
                         scheme=scheme_name,
                         is_valid=scheme_valid,
-                        min_val= min_val,
-                        max_val= max_val,
+                        min_val=min_val,
+                        max_val=max_val,
                         sr=sr,
                     )
 
@@ -220,7 +226,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         for data_stream in mongo_data_streams:
             for role in self.roles:
                 sample_stream_name = (
-                        role + "." + data_stream["name"] + "." + data_stream["fileExt"]
+                    role + "." + data_stream["name"] + "." + data_stream["fileExt"]
                 )
                 sample_data_path = os.path.join(
                     self.nova_data_dir,
@@ -229,7 +235,6 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     sample_stream_name,
                 )
                 dtype = nt.string_to_enum(nt.DataTypes, data_stream["type"])
-
 
                 if dtype == nt.DataTypes.VIDEO:
                     data = VideoData(
@@ -300,7 +305,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 0
             ]
             dur = session_info["duration"]
-            # If are loading any datastreams we check if any datastream is shorter than the duration stored in the database suggests
+
+            # If we are loading any datastreams we check if any datastream is shorter than the duration stored in the database suggests
             if self.data_info:
                 dur = min(*[v.dur for k, v in self.data_info.items()], dur)
 
@@ -315,43 +321,53 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 self.stride_ms = self.frame_size_ms
 
             # Starting position of the first frame in seconds
-            #c_pos_ms = self.left_context_ms + self.start_ms
+            # c_pos_ms = self.left_context_ms + self.start_ms
             c_pos_ms = max(self.left_context_ms, self.start_ms)
 
             # Generate samples for this session
             while c_pos_ms + self.stride_ms + self.right_context_ms <= min(
-                    self.end_ms, dur_ms
+                self.end_ms, dur_ms
             ):
                 frame_start_ms = c_pos_ms - self.left_context_ms
                 frame_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
 
-
                 key = (
-                        session
-                        + "_"
-                        + str(frame_start_ms / 1000)
-                        + "_"
-                        + str(frame_end_ms / 1000)
+                    session
+                    + "_"
+                    + str(frame_start_ms / 1000)
+                    + "_"
+                    + str(frame_end_ms / 1000)
                 )
 
                 labels_for_frame = [
                     {k: v.get_label_for_frame(frame_start_ms, frame_end_ms)}
                     for k, v in self.annos.items()
                 ]
+
+
                 data_for_frame = []
 
                 for k, v in self.data_info.items():
                     sample = v.get_sample(frame_start_ms, frame_end_ms)
                     if sample.shape[0] == 0:
-                        print(f'Sample{frame_start_ms}-{frame_end_ms} is empty')
+                        print(f"Sample{frame_start_ms}-{frame_end_ms} is empty")
                         c_pos_ms += self.stride_ms
                         continue
                     data_for_frame.append({k: sample})
 
                 sample_dict = {}
 
+                garbage_detected = False
                 for l in labels_for_frame:
+                    if np.isnan(list(l.values())[0]):
+                        garbage_detected = True
                     sample_dict.update(l)
+
+                # If at least one label is a garbage label we skip this iteration
+                if garbage_detected:
+                    c_pos_ms += self.stride_ms
+                    sample_counter += 1
+                    continue
 
                 for d in data_for_frame:
                     sample_dict.update(d)
@@ -374,7 +390,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                         )
 
                         sample_dict_for_role["frame"] = (
-                                str(sample_counter) + "_" + key + "_" + role
+                            str(sample_counter) + "_" + key + "_" + role
                         )
                         # yield key + '_' + role, sample_dict_for_role
                         yield sample_dict_for_role
@@ -398,16 +414,14 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         return self._iterable.__next__()
 
     def get_output_info(self):
-
         def map_label_id(lid):
-            if self.flatten_samples and not lid == 'frame':
+            if self.flatten_samples and not lid == "frame":
                 return split_role_key(lid)[-1]
             return lid
 
         return {
-                    # Adding fake framenumber label for sorting
-                    'frame': {"dtype":np.str, "shape":(1,)},
-                    **{map_label_id(k): v.get_info()[1] for k, v in self.annos.items()},
-                    **{map_label_id(k): v.get_info()[1] for k, v in self.data_info.items()}
-                }
-
+            # Adding fake framenumber label for sorting
+            "frame": {"dtype": np.str, "shape": (1,)},
+            **{map_label_id(k): v.get_info()[1] for k, v in self.annos.items()},
+            **{map_label_id(k): v.get_info()[1] for k, v in self.data_info.items()},
+        }

@@ -5,7 +5,7 @@ from numba import njit
 from abc import ABC, abstractmethod
 from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import merge_role_key
 
-
+# TODO: Currently we do not take the rest class into account when calculating the label for the frame. Maybe we should do this
 @njit
 def _get_overlap(a, start, end):
     """
@@ -52,6 +52,9 @@ def _get_anno_majority(a, overlap_idxs, start, end):
 
 
 class Annotation(ABC):
+
+    GARBAGE = np.NAN
+
     def __init__(self, role: str = "", scheme: str = "", is_valid: bool = True):
         self.role = role
         self.scheme = scheme
@@ -96,7 +99,7 @@ class Annotation(ABC):
 class DiscreteAnnotation(Annotation):
 
     REST = "REST"
-
+    GARBAGE = -1
     def __init__(self, labels={}, add_rest_class=False, **kwargs):
         super().__init__(**kwargs)
         self.dataframe = None
@@ -186,9 +189,13 @@ class DiscreteAnnotation(Annotation):
             if self.add_rest_class:
                 return len(self.labels.values()) - 1
             else:
-                return -1
+                return DiscreteAnnotation.GARBAGE
 
         majority_idx = _get_anno_majority(self.data_interval, overlap_idxs, start, end)
+
+        # If frame evaluates to garbage label discard sample
+        if majority_idx == DiscreteAnnotation.GARBAGE:
+            return Annotation.GARBAGE
 
         return int(self.data_values[majority_idx, 0])
 
@@ -286,6 +293,10 @@ class FreeAnnotation(Annotation):
 
 
 class ContinuousAnnotation(Annotation):
+
+    # TODO: Verify np.NAN is correct
+    GARBAGE = np.NAN
+
     def __init__(self, sr=0, min_val=0, max_val=0, **kwargs):
         super().__init__(**kwargs)
         self.type = nt.AnnoTypes.CONTINUOUS
@@ -311,12 +322,17 @@ class ContinuousAnnotation(Annotation):
             frame_data = frame[:, 0]
             frame_conf = frame[:, 1]
         else:
-            return -1
+            return ContinuousAnnotation.GARBAGE
 
         # TODO: Return timeseries instead of average
         conf = sum(frame_conf) / max(len(frame_conf), 1)
         label = sum(frame_data) / max(len(frame_data), 1)
-        return label
+
+        # If frame evaluates to garbage label discard sample
+        if np.isnan(label):
+            return Annotation.GARBAGE
+        else:
+            return label
 
     def postprocess(self):
         pass
