@@ -45,15 +45,25 @@ def _get_anno_majority(a, overlap_idxs, start, end):
     majority_index = -1
     overlap = 0
     for i in np.where(overlap_idxs)[0]:
-        if (cur_overlap := np.minimum(end, a[i][1]) - np.maximum(start, a[i][0])) > overlap:
+        if (
+            cur_overlap := np.minimum(end, a[i][1]) - np.maximum(start, a[i][0])
+        ) > overlap:
             overlap = cur_overlap
             majority_index = i
     return majority_index
 
 
+def _is_garbage(local_label_id, nova_garbage_label_id):
+    # check for nan or compare with garbage label id
+    if local_label_id != local_label_id or local_label_id == nova_garbage_label_id:
+        return True
+    return False
+
+
 class Annotation(ABC):
 
-    GARBAGE = np.NAN
+    # Uniform label for garbage class handling in python
+    GARBAGE_LABEL_ID = np.NAN
 
     def __init__(self, role: str = "", scheme: str = "", is_valid: bool = True):
         self.role = role
@@ -98,9 +108,14 @@ class Annotation(ABC):
 
 class DiscreteAnnotation(Annotation):
 
-    REST = "REST"
-    GARBAGE = -1
-    def __init__(self, labels={}, add_rest_class=False, **kwargs):
+    # Class ids and string names as provided from NOVA-DB and required by SSI
+    NOVA_REST_CLASS_NAME = "REST"
+    NOVA_GARBAGE_LABEL_ID = -1
+
+    # Initialize Rest class id with garbage class id
+    REST_LABEL_ID = NOVA_GARBAGE_LABEL_ID
+
+    def __init__(self, labels: dict = None, add_rest_class=False, **kwargs):
         super().__init__(**kwargs)
         self.dataframe = None
         self.type = nt.AnnoTypes.DISCRETE
@@ -110,7 +125,8 @@ class DiscreteAnnotation(Annotation):
         }
         self.add_rest_class = add_rest_class
         if self.add_rest_class:
-            self.labels[max(self.labels.keys()) + 1] = DiscreteAnnotation.REST
+            self.REST_LABEL_ID = max(self.labels.keys()) + 1
+            self.labels[self.REST_LABEL_ID] = self.NOVA_REST_CLASS_NAME
 
     def get_info(self):
         return merge_role_key(self.role, self.scheme), {"dtype": np.int32, "shape": 1}
@@ -184,20 +200,15 @@ class DiscreteAnnotation(Annotation):
 
         overlap_idxs = _get_overlap(self.data_interval, start, end)
 
-        # No label matches
+        # If no label overlaps the requested frame we return rest class. If add_rest_class = False garbage label will be returned instead
         if not overlap_idxs.any():
-            if self.add_rest_class:
-                return len(self.labels.values()) - 1
-            else:
-                return DiscreteAnnotation.GARBAGE
+            return self.REST_LABEL_ID
 
         majority_idx = _get_anno_majority(self.data_interval, overlap_idxs, start, end)
-
-        # If frame evaluates to garbage label discard sample
-        if majority_idx == DiscreteAnnotation.GARBAGE:
-            return Annotation.GARBAGE
-
-        return int(self.data_values[majority_idx, 0])
+        label = self.data_values[majority_idx, 0]
+        if _is_garbage(label, self.NOVA_GARBAGE_LABEL_ID):
+            return Annotation.GARBAGE_LABEL_ID
+        return label
 
     def get_label_for_frame(self, start, end):
         return self.get_label_for_frame_np(start, end)
@@ -294,8 +305,8 @@ class FreeAnnotation(Annotation):
 
 class ContinuousAnnotation(Annotation):
 
-    # TODO: Verify np.NAN is correct
-    GARBAGE = np.NAN
+    # Class ids and string names as provided from NOVA-DB and required by SSI
+    NOVA_GARBAGE_LABEL_ID = np.NAN
 
     def __init__(self, sr=0, min_val=0, max_val=0, **kwargs):
         super().__init__(**kwargs)
@@ -322,15 +333,15 @@ class ContinuousAnnotation(Annotation):
             frame_data = frame[:, 0]
             frame_conf = frame[:, 1]
         else:
-            return ContinuousAnnotation.GARBAGE
+            return self.NOVA_GARBAGE_LABEL_ID
 
         # TODO: Return timeseries instead of average
         conf = sum(frame_conf) / max(len(frame_conf), 1)
         label = sum(frame_data) / max(len(frame_data), 1)
 
         # If frame evaluates to garbage label discard sample
-        if np.isnan(label):
-            return Annotation.GARBAGE
+        if _is_garbage(label, self.NOVA_GARBAGE_LABEL_ID):
+            return Annotation.GARBAGE_LABEL_ID
         else:
             return label
 
