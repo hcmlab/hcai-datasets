@@ -353,7 +353,9 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
                 garbage_detected = False
                 for l in labels_for_frame:
-                    if np.isnan(list(l.values())[0]):
+                    lv = list(l.values())[0]
+                    # check for nan
+                    if lv != lv:
                         garbage_detected = True
                     sample_dict.update(l)
 
