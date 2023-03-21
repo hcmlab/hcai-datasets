@@ -2,8 +2,6 @@ from typing import Iterator
 
 from torch.utils.data.dataset import T_co, IterableDataset
 
-import tensorflow as tf
-
 from hcai_dataset_utils.dataset_iterable import DatasetIterable
 
 

@@ -1,9 +1,9 @@
-import hcai_datasets.hcai_nova_dynamic.utils.nova_types as nt
 import numpy as np
 import pandas as pd
 from numba import njit
 from abc import ABC, abstractmethod
-from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import merge_role_key
+from hcai_datasets.hcai_nova_dynamic.utils.nova_string_utils import merge_role_key
+from nova_utils.db_utils import nova_types as nt
 
 # TODO: Currently we do not take the rest class into account when calculating the label for the frame. Maybe we should do this
 @njit

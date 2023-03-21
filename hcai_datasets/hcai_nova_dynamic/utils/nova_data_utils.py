@@ -2,12 +2,11 @@ from decord import VideoReader, AudioReader, cpu
 import numpy as np
 import os
 
-# import librosa
-from hcai_datasets.hcai_nova_dynamic.utils import nova_types as nt
-from hcai_datasets.hcai_nova_dynamic.utils.ssi_stream_utils import Stream
-from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import (
+
+from nova_utils.db_utils import nova_types as nt
+from nova_utils.ssi_utils.ssi_stream_utils import Stream
+from hcai_datasets.hcai_nova_dynamic.utils.nova_string_utils import (
     merge_role_key,
-    split_role_key,
 )
 from typing import Union
 from abc import ABC, abstractmethod

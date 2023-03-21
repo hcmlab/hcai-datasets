@@ -9,11 +9,9 @@ from tensorflow_datasets.core import split_builder as split_builder_lib
 
 from hcai_dataset_utils.bridge_tf import BridgeTensorflow
 from hcai_datasets.hcai_nova_dynamic.hcai_nova_dynamic_iterable import HcaiNovaDynamicIterable
-import hcai_datasets.hcai_nova_dynamic.utils.nova_types as nt
-import hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils as ndu
-import hcai_datasets.hcai_nova_dynamic.utils.nova_anno_utils as nau
+import nova_utils.db_utils.nova_types as nt
 
-from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import *
+from hcai_datasets.hcai_nova_dynamic.utils.nova_string_utils import *
 
 # TODO(hcai_audioset): Markdown description  that will appear on the catalog page.
 _DESCRIPTION = """

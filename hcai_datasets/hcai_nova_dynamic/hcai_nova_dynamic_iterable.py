@@ -1,11 +1,7 @@
-import warnings
-
 import numpy as np
 import os
-import shutil
-import sys
 
-import hcai_datasets.hcai_nova_dynamic.utils.nova_types as nt
+import nova_utils.db_utils.nova_types as nt
 import hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils as ndu
 import hcai_datasets.hcai_nova_dynamic.utils.nova_anno_utils as nau
 from hcai_dataset_utils.dataset_iterable import DatasetIterable
@@ -15,14 +11,9 @@ from hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils import (
     VideoData,
     StreamData,
 )
-from hcai_datasets.hcai_nova_dynamic.utils.nova_anno_utils import (
-    DiscreteAnnotation,
-    ContinuousAnnotation,
-    FreeAnnotation,
-)
 
 from hcai_datasets.hcai_nova_dynamic.nova_db_handler import NovaDBHandler
-from hcai_datasets.hcai_nova_dynamic.utils.nova_utils import *
+from hcai_datasets.hcai_nova_dynamic.utils.nova_string_utils import *
 
 
 class HcaiNovaDynamicIterable(DatasetIterable):
@@ -297,6 +288,9 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
         for session in self.sessions:
 
+            _frame_size_ms = self.frame_size_ms
+            _stride_ms = self.stride_ms
+
             # Gather all data we need for this session
             self._load_annotation_for_session(session, time_to_ms=True)
             self._open_data_reader_for_session(session)
@@ -317,19 +311,19 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
             # If framesize is not specified we return the whole session as one junk
             if self.frame_size_ms is None:
-                self.frame_size_ms = min(dur_ms, self.end_ms - self.start_ms)
-                self.stride_ms = self.frame_size_ms
+                _frame_size_ms = min(dur_ms, self.end_ms - self.start_ms)
+                _stride_ms = _frame_size_ms
 
             # Starting position of the first frame in seconds
             # c_pos_ms = self.left_context_ms + self.start_ms
             c_pos_ms = max(self.left_context_ms, self.start_ms)
 
             # Generate samples for this session
-            while c_pos_ms + self.stride_ms + self.right_context_ms <= min(
+            while c_pos_ms + _stride_ms + self.right_context_ms <= min(
                 self.end_ms, dur_ms
             ):
                 frame_start_ms = c_pos_ms - self.left_context_ms
-                frame_end_ms = c_pos_ms + self.frame_size_ms + self.right_context_ms
+                frame_end_ms = c_pos_ms + _frame_size_ms + self.right_context_ms
 
                 key = (
                     session
@@ -351,7 +345,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     sample = v.get_sample(frame_start_ms, frame_end_ms)
                     if sample.shape[0] == 0:
                         print(f"Sample{frame_start_ms}-{frame_end_ms} is empty")
-                        c_pos_ms += self.stride_ms
+                        c_pos_ms += _stride_ms
                         continue
                     data_for_frame.append({k: sample})
 
@@ -365,7 +359,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
                 # If at least one label is a garbage label we skip this iteration
                 if garbage_detected:
-                    c_pos_ms += self.stride_ms
+                    c_pos_ms += _stride_ms
                     sample_counter += 1
                     continue
 
@@ -395,12 +389,12 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                         # yield key + '_' + role, sample_dict_for_role
                         yield sample_dict_for_role
                         sample_counter += 1
-                    c_pos_ms += self.stride_ms
+                    c_pos_ms += _stride_ms
 
                 else:
                     sample_dict["frame"] = str(sample_counter) + "_" + key
                     yield sample_dict
-                    c_pos_ms += self.stride_ms
+                    c_pos_ms += _stride_ms
                     sample_counter += 1
 
             # closing file readers for this session
