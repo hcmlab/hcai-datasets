@@ -4,7 +4,7 @@ import os
 import nova_utils.db_utils.nova_types as nt
 import hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils as ndu
 import hcai_datasets.hcai_nova_dynamic.utils.nova_anno_utils as nau
-from hcai_dataset_utils.dataset_iterable import DatasetIterable
+from nova_utils.interfaces.dataset_iterable import DatasetIterable
 
 from hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils import (
     AudioData,
@@ -19,7 +19,7 @@ from hcai_datasets.hcai_nova_dynamic.utils.nova_string_utils import *
 class HcaiNovaDynamicIterable(DatasetIterable):
     def __init__(
         self,
-        *,
+        *args,
         db_config_path=None,
         db_config_dict=None,
         dataset=None,
@@ -35,9 +35,9 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         right_context="0s",
         frame_size=None,
         stride=None,
+        add_rest_class=True,
         flatten_samples=False,
         supervised_keys=None,
-        add_rest_class=True,
         lazy_loading=False,
         **kwargs,
     ):
@@ -64,6 +64,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
           end: optional end time_ms. use if only a specifc chunk of a session should be retreived.
           **kwargs: arguments that will be passed through to the dataset builder
         """
+        super().__init__(*args, **kwargs)
         self.dataset = dataset
         self.nova_data_dir = nova_data_dir
         self.sessions = sessions
@@ -334,10 +335,9 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 )
 
                 labels_for_frame = [
-                    {k: v.get_label_for_frame(frame_start_ms, frame_end_ms)}
+                    (k, v.get_label_for_frame(frame_start_ms, frame_end_ms))
                     for k, v in self.annos.items()
                 ]
-
 
                 data_for_frame = []
 
@@ -352,12 +352,19 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 sample_dict = {}
 
                 garbage_detected = False
-                for l in labels_for_frame:
-                    lv = list(l.values())[0]
+                for label_id, label_value in labels_for_frame:
                     # check for nan
-                    if any(lv != lv):
-                        garbage_detected = True
-                    sample_dict.update(l)
+                    if (
+                        type(label_value) != list
+                        and type(label_value) != str
+                        and type(label_value) != np.ndarray
+                    ):
+                        try:
+                            if label_value != label_value:
+                                garbage_detected = True
+                        except:
+                            breakpoint()
+                    sample_dict.update({label_id: label_value})
 
                 # If at least one label is a garbage label we skip this iteration
                 if garbage_detected:

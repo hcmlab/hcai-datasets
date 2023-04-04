@@ -225,7 +225,7 @@ class StreamData(Data):
             )
 
     def open_file_reader_hook(self, path: str) -> bool:
-        stream = Stream(path)
+        stream = Stream(path=path)
         if stream:
             self.file_reader = stream
             self.dur = stream.data.shape[0] / stream.sr
@@ -238,9 +238,10 @@ class StreamData(Data):
         return True
 
     def populate_meta_info(self, path: str):
-        stream = Stream().load_header(path)
+        stream = Stream()
+        stream.load_header(path)
         self.sample_data_shape = (stream.dim,)
-        self.np_data_type = stream.type
+        self.np_data_type = stream.dtype
         self.meta_loaded = True
 
 
