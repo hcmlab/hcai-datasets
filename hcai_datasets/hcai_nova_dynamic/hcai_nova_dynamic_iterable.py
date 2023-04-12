@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import os
 
@@ -228,38 +230,42 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 )
                 dtype = nt.string_to_enum(nt.DataTypes, data_stream["type"])
 
-                if dtype == nt.DataTypes.VIDEO:
-                    data = VideoData(
-                        role=role,
-                        name=data_stream["name"],
-                        file_ext=data_stream["fileExt"],
-                        sr=data_stream["sr"],
-                        is_valid=data_stream["isValid"],
-                        sample_data_path=sample_data_path,
-                        lazy_loading=self.lazy_loading,
-                    )
-                elif dtype == nt.DataTypes.AUDIO:
-                    data = AudioData(
-                        role=role,
-                        name=data_stream["name"],
-                        file_ext=data_stream["fileExt"],
-                        sr=data_stream["sr"],
-                        is_valid=data_stream["isValid"],
-                        sample_data_path=sample_data_path,
-                        lazy_loading=self.lazy_loading,
-                    )
-                elif dtype == nt.DataTypes.FEATURE:
-                    data = StreamData(
-                        role=role,
-                        name=data_stream["name"],
-                        sr=data_stream["sr"],
-                        data_type=dtype,
-                        is_valid=data_stream["isValid"],
-                        sample_data_path=sample_data_path,
-                        lazy_loading=self.lazy_loading,
-                    )
-                else:
-                    raise ValueError("Invalid data type {}".format(data_stream["type"]))
+                try:
+                    if dtype == nt.DataTypes.VIDEO:
+                        data = VideoData(
+                            role=role,
+                            name=data_stream["name"],
+                            file_ext=data_stream["fileExt"],
+                            sr=data_stream["sr"],
+                            is_valid=data_stream["isValid"],
+                            sample_data_path=sample_data_path,
+                            lazy_loading=self.lazy_loading,
+                        )
+                    elif dtype == nt.DataTypes.AUDIO:
+                        data = AudioData(
+                            role=role,
+                            name=data_stream["name"],
+                            file_ext=data_stream["fileExt"],
+                            sr=data_stream["sr"],
+                            is_valid=data_stream["isValid"],
+                            sample_data_path=sample_data_path,
+                            lazy_loading=self.lazy_loading,
+                        )
+                    elif dtype == nt.DataTypes.FEATURE:
+                        data = StreamData(
+                            role=role,
+                            name=data_stream["name"],
+                            sr=data_stream["sr"],
+                            data_type=dtype,
+                            is_valid=data_stream["isValid"],
+                            sample_data_path=sample_data_path,
+                            lazy_loading=self.lazy_loading,
+                        )
+                    else:
+                        raise ValueError("Invalid data type {}".format(data_stream["type"]))
+
+                except FileNotFoundError:
+                    continue
 
                 data_id = merge_role_key(role=role, key=data_stream["name"])
                 data_info[data_id] = data
