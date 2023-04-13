@@ -1,7 +1,8 @@
 from decord import VideoReader, AudioReader, cpu
 import numpy as np
 import os
-
+import sys
+import errno
 
 from nova_utils.db_utils import nova_types as nt
 from nova_utils.ssi_utils.ssi_stream_utils import Stream
@@ -13,18 +14,29 @@ from abc import ABC, abstractmethod
 
 
 class Data(ABC):
-
     def __init__(
-            self,
-            role: str = "",
-            name: str = "",
-            file_ext: str = "stream",
-            sr: int = 0,
-            data_type: nt.DataTypes = None,
-            is_valid: bool = True,
-            sample_data_path: str = "",
-            lazy_loading: bool = False,
+        self,
+        role: str = "",
+        name: str = "",
+        file_ext: str = "stream",
+        sr: int = 0,
+        data_type: nt.DataTypes = None,
+        is_valid: bool = True,
+        sample_data_path: str = "",
+        lazy_loading: bool = False,
     ):
+        """
+
+        Args:
+            role ():
+            name ():
+            file_ext ():
+            sr ():
+            data_type ():
+            is_valid ():
+            sample_data_path ():
+            lazy_loading ():
+        """
         self.role = role
         self.name = name
         self.is_valid = is_valid
@@ -41,10 +53,17 @@ class Data(ABC):
         # Set when open_file_reader is called
         self.file_path = None
         self.file_reader = None
-        self.dur = None
+        self.dur = sys.maxsize
 
         if sample_data_path:
-            self.populate_meta_info(sample_data_path)
+            if not os.path.isfile(sample_data_path):
+                self.meta_loaded = False
+                print(
+                    f"WARNING: Sample file {sample_data_path} not found. Could not initialize meta data."
+                )
+                # raise FileNotFoundError( errno.ENOENT, os.strerror(errno.ENOENT), sample_data_path)
+            else:
+                self.populate_meta_info(sample_data_path)
 
     def data_stream_opend(self):
         if not self.file_reader:
@@ -61,7 +80,7 @@ class Data(ABC):
                 return {
                     "frame_start": {"dtype": np.float32, "shape": (1)},
                     "frame_end": {"dtype": np.float32, "shape": (1)},
-                    "file_path": {"dtype": np.str, "shape": (None,)}
+                    "file_path": {"dtype": np.str, "shape": (None,)},
                 }
             return self.get_info_hook()
         else:
@@ -71,21 +90,36 @@ class Data(ABC):
                 )
             )
 
-    def get_sample(self, frame_start: int, frame_end: int):
+    def get_sample(self, frame_start_ms: int, frame_end_ms: int):
         """
         Returns the sample for the respective frames. If lazy loading is true, only the filepath and frame_start, frame_end will be returned.
         """
-        if self.lazy_loading:
+
+        if not self.file_reader:
+            start_frame = milli_seconds_to_frame(self.sr, frame_start_ms)
+            end_frame = milli_seconds_to_frame(self.sr, frame_end_ms)
+            return np.zeros(self.sample_data_shape + (end_frame - start_frame, ))
+        elif self.lazy_loading:
             return {
-                "frame_start": frame_start,
-                "frame_end": frame_end,
+                "frame_start": frame_start_ms,
+                "frame_end": frame_end_ms,
                 "file_path": self.file_path,
             }
         else:
-            return self.get_sample_hook(frame_start, frame_end)
+            return self.get_sample_hook(frame_start_ms, frame_end_ms)
 
     def open_file_reader(self, path: str):
+        """
+        Args:
+            path ():
+        Raises:
+            FileNotFoundError: If path is not a file
+        """
         self.file_path = path
+        if not os.path.isfile(path):
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        if not self.meta_loaded:
+            self.populate_meta_info(path)
         self.open_file_reader_hook(path)
 
     @abstractmethod
@@ -128,10 +162,13 @@ class AudioData(Data):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        # Overwrite default
+        self.sample_data_shape = (1, )
+
     def get_info_hook(self):
         return merge_role_key(self.role, self.name), {
             "shape": self.sample_data_shape,
-            "dtype": np.float32
+            "dtype": np.float32,
         }
 
     def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
@@ -143,16 +180,16 @@ class AudioData(Data):
         return chunk
 
     def open_file_reader_hook(self, path: str):
-        if not os.path.isfile(path):
-            print("Session file not found at {}.".format(path))
-            raise FileNotFoundError()
         self.file_reader = AudioReader(path, ctx=cpu(0), mono=False)
         self.dur = self.file_reader.duration()
 
     def populate_meta_info(self, path: str):
-        if not os.path.isfile(path):
-            print("Sample file not found at {}. Can't load metadata.".format(path))
-            raise FileNotFoundError()
+        """
+
+        Args:
+            path ():
+        """
+
         file_reader = AudioReader(path, ctx=cpu(0), mono=False)
         n_channels = file_reader.shape[0]
         self.sample_data_shape = (None, n_channels)
@@ -166,10 +203,14 @@ class VideoData(Data):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        # Overwrite default
+        self.sample_data_shape = (480, 640, 3)
+
+
     def get_info_hook(self):
         return merge_role_key(self.role, self.name), {
             "shape": self.sample_data_shape,
-            "dtype": np.float32
+            "dtype": np.float32,
         }
 
     def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
@@ -181,18 +222,12 @@ class VideoData(Data):
         return chunk
 
     def open_file_reader_hook(self, path: str):
-        if not os.path.isfile(path):
-            print("Session file not found at {}.".format(path))
-            raise FileNotFoundError()
         self.file_reader = VideoReader(path, ctx=cpu(0))
         fps = self.file_reader.get_avg_fps()
         frame_count = len(self.file_reader)
         self.dur = frame_count / fps
 
     def populate_meta_info(self, path: str):
-        if not os.path.isfile(path):
-            print("Sample file not found at {}. Can't load metadata.".format(path))
-            raise FileNotFoundError()
         file_reader = VideoReader(path)
         self.sample_data_shape = file_reader[0].shape
         self.meta_loaded = True
@@ -204,11 +239,14 @@ class VideoData(Data):
 class StreamData(Data):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # Overwrite default
+        self.sample_data_shape = (1, )
+
 
     def get_info_hook(self):
         return merge_role_key(self.role, self.name), {
             "shape": self.sample_data_shape,
-            "dtype": self.np_data_type
+            "dtype": self.np_data_type,
         }
 
     def get_sample_hook(self, frame_start_ms: int, frame_end_ms: int):
@@ -303,4 +341,6 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
         except ValueError:
             raise ValueError("Invalid input format for frame: {}".format(frame))
 
-    print(f'WARNING: Could  not automatically parse time "{frame}" to seconds. Returning None ')
+    print(
+        f'WARNING: Could  not automatically parse time "{frame}" to seconds. Returning None '
+    )
