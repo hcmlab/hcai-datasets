@@ -1,4 +1,5 @@
 import os
+import errno
 import copy
 import warnings
 import configparser
@@ -294,10 +295,7 @@ class NovaDBHandler:
 
         # getting the annotation data and the session name
         if not mongo_annos:
-            print(
-                f"No annotations found for \n\t-annotator: {annotator}\n\t-scheme: {scheme}\n\t-session: {session}\n\t-role: {roles}"
-            )
-            return []
+            raise FileNotFoundError(errno.ENOENT, 'No such annotation', f"annotator: {annotator} - scheme: {scheme} - session: {session} - role: {roles}")
 
         else:
             # TODO: adapt for multiple roles, annotators etc.

@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import os
 
@@ -39,6 +41,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         flatten_samples=False,
         supervised_keys=None,
         lazy_loading=False,
+        fake_missing_data=True,
         **kwargs,
     ):
         """
@@ -62,6 +65,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
           data_streams: list datastreams for which the annotation should be loaded. must match stream names in nova.
           start: optional start time_ms. use if only a specific chunk of a session should be retreived.
           end: optional end time_ms. use if only a specifc chunk of a session should be retreived.
+          fake_missing_data: If set to true missing datastreams will provide zero data and missing annotations will be empty. If set to false a session will be skipped if an expected data stream or annotation are not found.
           **kwargs: arguments that will be passed through to the dataset builder
         """
         super().__init__(*args, **kwargs)
@@ -91,6 +95,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         self.flatten_samples = flatten_samples
         self.add_rest_class = add_rest_class
         self.lazy_loading = lazy_loading
+        self.fake_missing_data = fake_missing_data
         self.nova_db_handler = NovaDBHandler(db_config_path, db_config_dict)
 
         # Retrieving meta information from the database
@@ -163,7 +168,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     labels = scheme["labels"]
                     annos[label_id] = nau.DiscreteAnnotation(
                         role=role,
-                        add_rest_class=True,
+                        add_rest_class=self.add_rest_class,
                         scheme=scheme_name,
                         is_valid=scheme_valid,
                         labels=labels,
@@ -227,39 +232,46 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     sample_stream_name,
                 )
                 dtype = nt.string_to_enum(nt.DataTypes, data_stream["type"])
+                try:
+                    if dtype == nt.DataTypes.VIDEO:
+                        data = VideoData(
+                            role=role,
+                            name=data_stream["name"],
+                            file_ext=data_stream["fileExt"],
+                            sr=data_stream["sr"],
+                            is_valid=data_stream["isValid"],
+                            sample_data_path=sample_data_path,
+                            lazy_loading=self.lazy_loading,
+                        )
+                    elif dtype == nt.DataTypes.AUDIO:
+                        data = AudioData(
+                            role=role,
+                            name=data_stream["name"],
+                            file_ext=data_stream["fileExt"],
+                            sr=data_stream["sr"],
+                            is_valid=data_stream["isValid"],
+                            sample_data_path=sample_data_path,
+                            lazy_loading=self.lazy_loading,
+                        )
+                    elif dtype == nt.DataTypes.FEATURE:
+                        data = StreamData(
+                            role=role,
+                            name=data_stream["name"],
+                            sr=data_stream["sr"],
+                            data_type=dtype,
+                            is_valid=data_stream["isValid"],
+                            sample_data_path=sample_data_path,
+                            lazy_loading=self.lazy_loading,
+                        )
+                    else:
+                        raise ValueError("Invalid data type".format(data_stream["type"]))
 
-                if dtype == nt.DataTypes.VIDEO:
-                    data = VideoData(
-                        role=role,
-                        name=data_stream["name"],
-                        file_ext=data_stream["fileExt"],
-                        sr=data_stream["sr"],
-                        is_valid=data_stream["isValid"],
-                        sample_data_path=sample_data_path,
-                        lazy_loading=self.lazy_loading,
-                    )
-                elif dtype == nt.DataTypes.AUDIO:
-                    data = AudioData(
-                        role=role,
-                        name=data_stream["name"],
-                        file_ext=data_stream["fileExt"],
-                        sr=data_stream["sr"],
-                        is_valid=data_stream["isValid"],
-                        sample_data_path=sample_data_path,
-                        lazy_loading=self.lazy_loading,
-                    )
-                elif dtype == nt.DataTypes.FEATURE:
-                    data = StreamData(
-                        role=role,
-                        name=data_stream["name"],
-                        sr=data_stream["sr"],
-                        data_type=dtype,
-                        is_valid=data_stream["isValid"],
-                        sample_data_path=sample_data_path,
-                        lazy_loading=self.lazy_loading,
-                    )
-                else:
-                    raise ValueError("Invalid data type {}".format(data_stream["type"]))
+                except FileNotFoundError as fnf:
+                    if self.fake_missing_data:
+                        raise FileNotFoundError
+                    else:
+                        print(f"WARNING: Ignoring exception - {fnf}")
+                        continue
 
                 data_id = merge_role_key(role=role, key=data_stream["name"])
                 data_info[data_id] = data
@@ -269,17 +281,32 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
     def _load_annotation_for_session(self, session, time_to_ms=False):
         for label_id, anno in self.annos.items():
-            mongo_anno = self.nova_db_handler.get_annos(
-                self.dataset, anno.scheme, session, self.annotator, anno.role
-            )
-            anno.set_annotation_from_mongo_doc(mongo_anno, time_to_ms=time_to_ms)
+            try:
+                mongo_anno = self.nova_db_handler.get_annos(
+                    self.dataset, anno.scheme, session, self.annotator, anno.role
+                )
+            except FileNotFoundError as fnf:
+                mongo_anno = []
+                if self.fake_missing_data:
+                    print(f"WARNING: {fnf} - Providing dummy data")
+                else:
+                    raise fnf
+            finally:
+                anno.set_annotation_from_mongo_doc(mongo_anno, time_to_ms=time_to_ms)
 
     def _open_data_reader_for_session(self, session):
         for data_id, data in self.data_info.items():
-            data_path = os.path.join(
-                self.nova_data_dir, self.dataset, session, data_id + "." + data.file_ext
-            )
-            data.open_file_reader(data_path)
+            try:
+                data_path = os.path.join(
+                    self.nova_data_dir, self.dataset, session, data_id + "." + data.file_ext
+                )
+                data.open_file_reader(data_path)
+            except FileNotFoundError as fnf:
+                if self.fake_missing_data:
+                    print(f"WARNING: {fnf} - Providing dummy data")
+                else:
+                    raise fnf
+
 
     def _yield_sample(self):
         """Yields examples."""
@@ -293,8 +320,12 @@ class HcaiNovaDynamicIterable(DatasetIterable):
             _stride_ms = self.stride_ms
 
             # Gather all data we need for this session
-            self._load_annotation_for_session(session, time_to_ms=True)
-            self._open_data_reader_for_session(session)
+            try:
+                self._load_annotation_for_session(session, time_to_ms=True)
+                self._open_data_reader_for_session(session)
+            except FileNotFoundError as fnf:
+                print(f"WARNING: {fnf} - Skipping session {session}")
+                continue
 
             session_info = self.nova_db_handler.get_session_info(self.dataset, session)[
                 0
