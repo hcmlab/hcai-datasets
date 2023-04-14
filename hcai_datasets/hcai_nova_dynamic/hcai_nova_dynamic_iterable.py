@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 import os
+import copy
 
 import nova_utils.db_utils.nova_types as nt
 import hcai_datasets.hcai_nova_dynamic.utils.nova_data_utils as ndu
@@ -112,6 +113,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
             mongo_data
         )
 
+        self.session_info = {s: {} for s in self.sessions}
+
         # setting supervised keys
         if supervised_keys and self.flatten_samples:
             if supervised_keys[0] not in self.data_streams:
@@ -142,6 +145,43 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         self.supervised_keys = tuple(supervised_keys) if supervised_keys else None
 
         self._iterable = self._yield_sample()
+
+    def to_single_session_iterator(self, session_id=""):
+        """Returns a copy of the iterator for a single session. All data objects and annotation objects will be initialized."""
+        ds_iter_copy = copy.copy(self)
+        if session_id not in self.sessions:
+            print(
+                f"WARNING: Session {session_id} not found in iterator session list. Using first session instead: {ds_iter_copy.sessions[0]}"
+            )
+            session_id = ds_iter_copy.sessions[0]
+        elif not session_id:
+            session_id = ds_iter_copy.sessions[0]
+
+        ds_iter_copy._init_session(session_id)
+        return ds_iter_copy
+
+    def _init_session(self, session):
+        """Opens all annotations and data readers"""
+
+        if (
+            not self.session_info[session]
+            or not self.session_info[session]["is_active"]
+        ):
+
+            # Gather all data we need for this session
+            self._load_annotation_for_session(session, time_to_ms=True)
+            self._open_data_reader_for_session(session)
+
+            session_info = self.nova_db_handler.get_session_info(self.dataset, session)[
+                0
+            ]
+
+            # Depricate other sessions
+            for id, s in self.session_info.items():
+                s["is_active"] = False
+
+            session_info["is_active"] = True
+            self.session_info[session] = session_info
 
     def _populate_label_info_from_mongo_doc(self, mongo_schemes):
         """
@@ -264,7 +304,9 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                             lazy_loading=self.lazy_loading,
                         )
                     else:
-                        raise ValueError("Invalid data type".format(data_stream["type"]))
+                        raise ValueError(
+                            "Invalid data type".format(data_stream["type"])
+                        )
 
                 except FileNotFoundError as fnf:
                     if self.fake_missing_data:
@@ -298,7 +340,10 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         for data_id, data in self.data_info.items():
             try:
                 data_path = os.path.join(
-                    self.nova_data_dir, self.dataset, session, data_id + "." + data.file_ext
+                    self.nova_data_dir,
+                    self.dataset,
+                    session,
+                    data_id + "." + data.file_ext,
                 )
                 data.open_file_reader(data_path)
             except FileNotFoundError as fnf:
@@ -306,7 +351,6 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     print(f"WARNING: {fnf} - Providing dummy data")
                 else:
                     raise fnf
-
 
     def _yield_sample(self):
         """Yields examples."""
@@ -316,21 +360,12 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
         for session in self.sessions:
 
+            self._init_session(session)
+
+            session_info = self.session_info[session]
+            dur = session_info["duration"]
             _frame_size_ms = self.frame_size_ms
             _stride_ms = self.stride_ms
-
-            # Gather all data we need for this session
-            try:
-                self._load_annotation_for_session(session, time_to_ms=True)
-                self._open_data_reader_for_session(session)
-            except FileNotFoundError as fnf:
-                print(f"WARNING: {fnf} - Skipping session {session}")
-                continue
-
-            session_info = self.nova_db_handler.get_session_info(self.dataset, session)[
-                0
-            ]
-            dur = session_info["duration"]
 
             # If we are loading any datastreams we check if any datastream is shorter than the duration stored in the database suggests
             if self.data_info:
