@@ -304,7 +304,7 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
     # if frame is specified milliseconds as string
     if str(frame).endswith("ms"):
         try:
-            return float(frame[:-2])
+            return int(frame[:-2])
         except ValueError:
             raise ValueError(
                 "Invalid input format for frame in milliseconds: {}".format(frame)
@@ -313,7 +313,7 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
     elif str(frame).endswith("s"):
         try:
             frame_s = float(frame[:-1])
-            return float(frame_s * 1000)
+            return int(frame_s * 1000)
         except ValueError:
             raise ValueError(
                 "Invalid input format for frame in seconds: {}".format(frame)
@@ -326,7 +326,7 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
                     frame
                 )
             )
-            return float(1000 * float(frame))
+            return int(1000 * float(frame))
         except ValueError:
             raise ValueError("Invalid input format for frame: {}".format(frame))
     # if type is int we assume the input will be milliseconds
@@ -337,7 +337,7 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
                     frame
                 )
             )
-            return float(frame)
+            return int(frame)
         except ValueError:
             raise ValueError("Invalid input format for frame: {}".format(frame))
 

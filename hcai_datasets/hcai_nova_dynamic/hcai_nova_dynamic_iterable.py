@@ -82,9 +82,17 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         self.frame_size_ms = (
             ndu.parse_time_string_to_ms(frame_size) if frame_size else None
         )
+
+
+        if self.frame_size_ms == 0:
+            print("WARNING: Frame size 0 is invalid. Returning whole session as sample.")
+            self.frame_size_ms = None
+
         self.stride_ms = (
             ndu.parse_time_string_to_ms(stride) if stride else self.frame_size_ms
         )
+
+
         self.start_ms = ndu.parse_time_string_to_ms(start)
         if not self.start_ms:
             self.start_ms = 0
