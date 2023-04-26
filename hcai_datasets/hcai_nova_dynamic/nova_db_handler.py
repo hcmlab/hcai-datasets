@@ -477,6 +477,42 @@ class NovaDBHandler:
                 anno_id = success.inserted_id
         return anno_id
 
+    def set_data_streams(self, database: str, file_name: str, file_ext: str, stream_type: str,  is_valid:bool, sr: float, dimlabels: list):
+
+        # check if datastream already exists
+        mongo_stream = self.get_docs_by_prop(
+            file_name, "name", database, self.STREAM_COLLECTION
+        )
+        if mongo_stream:
+            print(f"INFO: Stream {file_name} already exists in database. Skip adding stream.")
+            return
+
+        # build doc
+        mongo_steam_doc = {
+            "name" : file_name,
+            "fileExt" : file_ext,
+            "type" : stream_type,
+            "isValid" : is_valid,
+            "sr" : sr,
+            "dimlabels": dimlabels
+        }
+
+        # insert datastream
+        success = self.insert_doc_by_prop(
+            doc=mongo_steam_doc,
+            database=database,
+            collection=self.STREAM_COLLECTION,
+        )
+
+
+        if not success.acknowledged:
+            warnings.warn(f"Unexpected error adding stream for {database} - {file_name}.{file_ext}. Upload failed.")
+            return ""
+        else:
+            stream_id = success.inserted_id
+
+        return stream_id
+
     def get_mongo_scheme(self, scheme, database):
         mongo_scheme = self.get_docs_by_prop(scheme, "name", database, self.SCHEME_COLLECTION)
         if not mongo_scheme:

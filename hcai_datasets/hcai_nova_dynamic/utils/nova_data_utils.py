@@ -24,6 +24,7 @@ class Data(ABC):
         is_valid: bool = True,
         sample_data_path: str = "",
         lazy_loading: bool = False,
+        n_samples_per_window: int = 1
     ):
         """
 
@@ -49,6 +50,7 @@ class Data(ABC):
         self.sample_data_shape = None
         self.np_data_type = None
         self.meta_loaded = False
+        self.n_frames_per_window = n_samples_per_window
 
         # Set when open_file_reader is called
         self.file_path = None
@@ -254,6 +256,14 @@ class StreamData(Data):
             self.data_stream_opend()
             start_frame = milli_seconds_to_frame(self.sr, frame_start_ms)
             end_frame = milli_seconds_to_frame(self.sr, frame_end_ms)
+
+            # rounding error
+            #if start_frame == end_frame:
+            #    end_frame += 1
+            #elif end_frame - start_frame > 1:
+
+
+
             return self.file_reader.data[start_frame:end_frame]
         except RuntimeError:
             print(
@@ -288,8 +298,8 @@ class StreamData(Data):
 ##########################
 
 
-def frame_to_seconds(sr: int, frame: int) -> float:
-    return frame / sr
+#def frame_to_seconds(sr: int, frame: int) -> float:
+#    return frame / sr
 
 
 def seconds_to_frame(sr: int, time_s: float) -> int:
@@ -298,6 +308,7 @@ def seconds_to_frame(sr: int, time_s: float) -> int:
 
 def milli_seconds_to_frame(sr: int, time_ms: int) -> int:
     return seconds_to_frame(sr=sr, time_s=time_ms / 1000)
+
 
 
 def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
