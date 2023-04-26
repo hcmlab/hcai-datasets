@@ -2,8 +2,9 @@ import os
 import errno
 import copy
 import warnings
-import configparser
+import enum
 
+from configparser import ConfigParser
 from typing import Union
 from datetime import datetime
 from pymongo import MongoClient
@@ -56,7 +57,13 @@ class NovaDBHandler:
             host=self.ip, port=self.port, username=self.user, password=self.password
         )
 
-    def print_config(self, cfg, cfg_path):
+    def print_config(self, cfg: ConfigParser, cfg_path: str) -> None:
+        """
+        Prints the provided configuration on the console
+        Args:
+            cfg (ConfigParser): The main configuration parser
+            cfg_path (str): The file to load the configuration from
+        """
         print("Loaded config from {}:".format(cfg_path))
         print("---------------------")
         for sec_name, sec_dict in cfg._sections.items():
@@ -68,28 +75,35 @@ class NovaDBHandler:
                     print("\t{} : {}".format(k, v))
         print("---------------------")
 
-    def read_config(self, cfg_path):
-        config = configparser.RawConfigParser()
+    def read_config(self, cfg_path: str) -> ConfigParser:
+        """
+        Reads a NovaServer configuration from a file
+        Args:
+            cfg_path (str): The file to load the configuration from
+
+        Returns:
+            ConfigParser: The parsed configuration
+
+        """
+        config = ConfigParser()
         config.read(cfg_path)
         self.print_config(config, cfg_path)
         return config
 
     # Reading from database
     def get_docs_by_prop(
-            self, vals: Union[list, str], property: str, database: str, collection: str
-    ) -> list:
+        self, vals: Union[list[str], str], property: str, database: str, collection: str
+    ) -> list[dict]:
         """
         Fetching a document from the mongo db collection in the respective database where the passed values are matching a specific property in the collection.
-
         Args:
-          vals: The specific value of a property in the document
-          property: The property to look for the passed values
-          database: The name of the database to search
-          collection: The name of the collection within the database to search
+            vals (Union[list[str], str]): Value(s) of a property in the document. Might be a single value or list of values.
+            property (str): Property to look for the passed values
+            database (str): Name of the database to search
+            collection (str): Name of the collection within the database to search
 
         Returns:
-          list: List of documents that match the specified criteria
-
+            list[dict]: List of documents that match the specified criteria
         """
         filter = []
 
@@ -103,19 +117,15 @@ class NovaDBHandler:
         ret = list(self.client[database][collection].find(filter))
         return ret
 
-    def get_schemes(self, dataset, schemes):
+    def get_schemes(self, dataset: str, schemes: list) -> list[dict]:
         """
-        Fetches the scheme object that matches the specified criteria from the nova database and returns them as a python readable dictionary.
+        Retreives all schemes matchin the provided criteria
         Args:
-          ip:
-          port:
-          user:
-          password:
-          dataset:
-          scheme:
+            dataset (str): Name of the dataset. Must match the respective entry in the MongoDB
+            schemes (str): List of schemes for which the mongo database entries are fetched
 
         Returns:
-
+            list[dict]: List of schemes that match the specified criteria
         """
 
         if not schemes:
@@ -131,7 +141,9 @@ class NovaDBHandler:
                 scheme, "name", dataset, self.SCHEME_COLLECTION
             )
             if not mongo_scheme:
-                print(f"WARNING: No scheme {scheme} found in database for dataset {dataset}")
+                print(
+                    f"WARNING: No scheme {scheme} found in database for dataset {dataset}"
+                )
             else:
                 mongo_schemes.append(mongo_scheme[0])
 
@@ -142,16 +154,16 @@ class NovaDBHandler:
 
         return mongo_schemes
 
-    def get_session_info(self, dataset, session):
+    def get_session_info(self, dataset: str, session: Union[list, str]) -> list[dict]:
         """
         Fetches the session object that matches the specified criteria from the nova database and returns them as a python readable dictionary.
 
         Args:
-          dataset:
-          session:
+          dataset (str): Name of the dataset. Must match the respective entry in the MongoDB
+          session (Union[list, str]): Session or list of sessions for which the mongo database entries are fetched
 
         Returns:
-
+          list[dict]: List of sessions that match the specified criteria
         """
         mongo_session = self.get_docs_by_prop(
             session, "name", dataset, self.SESSION_COLLECTION
@@ -190,13 +202,13 @@ class NovaDBHandler:
         return mongo_streams
 
     def get_annotation_docs(
-            self,
-            mongo_schemes,
-            mongo_sessions,
-            mongo_annotators,
-            mongo_roles,
-            database,
-            collection,
+        self,
+        mongo_schemes,
+        mongo_sessions,
+        mongo_annotators,
+        mongo_roles,
+        database,
+        collection,
     ):
         """
         Fetches all annotationobjects that match the specified criteria from the nova database
@@ -242,12 +254,12 @@ class NovaDBHandler:
         return ret
 
     def get_annos(
-            self,
-            dataset: str,
-            scheme: str,
-            session: str,
-            annotator: str,
-            roles: Union[list, str],
+        self,
+        dataset: str,
+        scheme: str,
+        session: str,
+        annotator: str,
+        roles: Union[list, str],
     ) -> list:
         """
         Fetches all annotations that matches the specified criteria from the nova database and returns them as a list of python readable dictionaries.
@@ -273,7 +285,9 @@ class NovaDBHandler:
         if not mongo_annotators:
             warnings.warn(f"Unknown annotator {annotator} found")
             return []
-        mongo_roles = self.get_docs_by_prop(roles, "name", dataset, self.ROLE_COLLECTION)
+        mongo_roles = self.get_docs_by_prop(
+            roles, "name", dataset, self.ROLE_COLLECTION
+        )
         if not mongo_roles:
             warnings.warn(f"Unknown role {roles} found")
             return []
@@ -295,7 +309,11 @@ class NovaDBHandler:
 
         # getting the annotation data and the session name
         if not mongo_annos:
-            raise FileNotFoundError(errno.ENOENT, 'No such annotation', f"annotator: {annotator} - scheme: {scheme} - session: {session} - role: {roles}")
+            raise FileNotFoundError(
+                errno.ENOENT,
+                "No such annotation",
+                f"annotator: {annotator} - scheme: {scheme} - session: {session} - role: {roles}",
+            )
 
         else:
             # TODO: adapt for multiple roles, annotators etc.
@@ -307,7 +325,7 @@ class NovaDBHandler:
         return label
 
     def insert_doc_by_prop(
-            self, doc: dict, database: str, collection: str
+        self, doc: dict, database: str, collection: str
     ) -> InsertOneResult:
         """
         Uploading a document to the database using the specificed parameters
@@ -323,7 +341,7 @@ class NovaDBHandler:
         return ret
 
     def update_doc_by_prop(
-            self, doc: dict, database: str, collection: str
+        self, doc: dict, database: str, collection: str
     ) -> UpdateResult:
         """
         Uploading a document to the database using the specificed parameters
@@ -341,7 +359,7 @@ class NovaDBHandler:
         return ret
 
     def update_doc_by_id(
-            self, _id: str, doc: dict, database: str, collection: str
+        self, _id: str, doc: dict, database: str, collection: str
     ) -> UpdateResult:
         """
         Uploading a document to the database using the specificed parameters
@@ -354,9 +372,7 @@ class NovaDBHandler:
         Returns:
           str: ObjectID of the inserted objects or an empty list in case of failure
         """
-        ret = self.client[database][collection].update_one(
-            {"_id": _id}, {"$set": doc}
-        )
+        ret = self.client[database][collection].update_one({"_id": _id}, {"$set": doc})
         return ret
 
     # TODO: Remove Restclass Labels in discrete Cases
@@ -364,15 +380,15 @@ class NovaDBHandler:
     # TODO: Add Backup case
     # TODO: Call preprocess of annotation
     def set_annos(
-            self,
-            database: str,
-            scheme: str,
-            session: str,
-            annotator: str,
-            role: str,
-            annos: list,
-            is_finished: bool = False,
-            is_locked: bool = False,
+        self,
+        database: str,
+        scheme: str,
+        session: str,
+        annotator: str,
+        role: str,
+        annos: list,
+        is_finished: bool = False,
+        is_locked: bool = False,
     ) -> str:
         """
         Uploading annotations to the database
@@ -406,10 +422,14 @@ class NovaDBHandler:
         mongo_data_id = None
         if mongo_annos:
             if mongo_annos[0]["isLocked"]:
-                warnings.warn(f"Can't overwrite locked annotation {str(mongo_annos[0]['_id'])}")
+                warnings.warn(
+                    f"Can't overwrite locked annotation {str(mongo_annos[0]['_id'])}"
+                )
                 return ""
             else:
-                warnings.warn(f"Overwriting existing annotation {str(mongo_annos[0]['_id'])}")
+                warnings.warn(
+                    f"Overwriting existing annotation {str(mongo_annos[0]['_id'])}"
+                )
                 mongo_anno_id = mongo_annos[0]["_id"]
                 mongo_data_id = mongo_annos[0]["data_id"]
 
@@ -423,7 +443,9 @@ class NovaDBHandler:
                 collection=self.ANNOTATION_DATA_COLLECTION,
             )
             if not success.acknowledged:
-                warnings.warn(f"Unknown error update database entries for Annotation data {mongo_data_id}")
+                warnings.warn(
+                    f"Unknown error update database entries for Annotation data {mongo_data_id}"
+                )
                 return ""
             else:
                 data_id = mongo_data_id
@@ -434,8 +456,10 @@ class NovaDBHandler:
                 collection=self.ANNOTATION_DATA_COLLECTION,
             )
             if not success.acknowledged:
-                warnings.warn(f"Unexpected error uploading annotation data for {database} - {session} - {scheme} - "
-                              f"{annotator}. Upload failed.")
+                warnings.warn(
+                    f"Unexpected error uploading annotation data for {database} - {session} - {scheme} - "
+                    f"{annotator}. Upload failed."
+                )
                 return ""
             else:
                 data_id = success.inserted_id
@@ -455,7 +479,9 @@ class NovaDBHandler:
         if mongo_anno_id:
             mongo_anno_doc["_id"] = mongo_anno_id
             success = self.update_doc_by_prop(
-                doc=mongo_anno_doc, database=database, collection=self.ANNOTATION_COLLECTION
+                doc=mongo_anno_doc,
+                database=database,
+                collection=self.ANNOTATION_COLLECTION,
             )
             if not success.acknowledged:
                 warnings.warn(
@@ -466,7 +492,9 @@ class NovaDBHandler:
                 anno_id = mongo_anno_id
         else:
             success = self.insert_doc_by_prop(
-                doc=mongo_anno_doc, database=database, collection=self.ANNOTATION_COLLECTION
+                doc=mongo_anno_doc,
+                database=database,
+                collection=self.ANNOTATION_COLLECTION,
             )
             if not success.acknowledged:
                 warnings.warn(
@@ -477,24 +505,35 @@ class NovaDBHandler:
                 anno_id = success.inserted_id
         return anno_id
 
-    def set_data_streams(self, database: str, file_name: str, file_ext: str, stream_type: str,  is_valid:bool, sr: float, dimlabels: list):
+    def set_data_streams(
+        self,
+        database: str,
+        file_name: str,
+        file_ext: str,
+        stream_type: str,
+        is_valid: bool,
+        sr: float,
+        dimlabels: list,
+    ):
 
         # check if datastream already exists
         mongo_stream = self.get_docs_by_prop(
             file_name, "name", database, self.STREAM_COLLECTION
         )
         if mongo_stream:
-            print(f"INFO: Stream {file_name} already exists in database. Skip adding stream.")
+            print(
+                f"INFO: Stream {file_name} already exists in database. Skip adding stream."
+            )
             return
 
         # build doc
         mongo_steam_doc = {
-            "name" : file_name,
-            "fileExt" : file_ext,
-            "type" : stream_type,
-            "isValid" : is_valid,
-            "sr" : sr,
-            "dimlabels": dimlabels
+            "name": file_name,
+            "fileExt": file_ext,
+            "type": stream_type,
+            "isValid": is_valid,
+            "sr": sr,
+            "dimlabels": dimlabels,
         }
 
         # insert datastream
@@ -504,9 +543,10 @@ class NovaDBHandler:
             collection=self.STREAM_COLLECTION,
         )
 
-
         if not success.acknowledged:
-            warnings.warn(f"Unexpected error adding stream for {database} - {file_name}.{file_ext}. Upload failed.")
+            warnings.warn(
+                f"Unexpected error adding stream for {database} - {file_name}.{file_ext}. Upload failed."
+            )
             return ""
         else:
             stream_id = success.inserted_id
@@ -514,7 +554,9 @@ class NovaDBHandler:
         return stream_id
 
     def get_mongo_scheme(self, scheme, database):
-        mongo_scheme = self.get_docs_by_prop(scheme, "name", database, self.SCHEME_COLLECTION)
+        mongo_scheme = self.get_docs_by_prop(
+            scheme, "name", database, self.SCHEME_COLLECTION
+        )
         if not mongo_scheme:
             warnings.warn(f"Unknown scheme {scheme} found")
             return ""
@@ -522,7 +564,9 @@ class NovaDBHandler:
         return mongo_scheme
 
     def get_mongo_annotator(self, annotator, database):
-        mongo_annotator = self.get_docs_by_prop(annotator, "name", database, self.ANNOTATOR_COLLECTION)
+        mongo_annotator = self.get_docs_by_prop(
+            annotator, "name", database, self.ANNOTATOR_COLLECTION
+        )
         if not mongo_annotator:
             warnings.warn(f"Unknown annotator {annotator} found")
             return ""
@@ -538,7 +582,9 @@ class NovaDBHandler:
         return mongo_role
 
     def get_mongo_session(self, session, database):
-        mongo_session = self.get_docs_by_prop(session, "name", database, self.SESSION_COLLECTION)
+        mongo_session = self.get_docs_by_prop(
+            session, "name", database, self.SESSION_COLLECTION
+        )
         if not mongo_session:
             warnings.warn(f"Unknown for session {session} found")
             return ""
@@ -548,16 +594,25 @@ class NovaDBHandler:
     def delete_doc_with_tail(self, doc_id_to_remove, database):
         while doc_id_to_remove is not None:
             remove_id = copy.deepcopy(doc_id_to_remove)
-            result = self.get_fields_by_properties(doc_id_to_remove, "_id", "nextEntry", database,
-                                                   self.ANNOTATION_DATA_COLLECTION)
-            if result is not None and 'nextEntry' in result:
-                doc_id_to_remove = result['nextEntry']
+            result = self.get_fields_by_properties(
+                doc_id_to_remove,
+                "_id",
+                "nextEntry",
+                database,
+                self.ANNOTATION_DATA_COLLECTION,
+            )
+            if result is not None and "nextEntry" in result:
+                doc_id_to_remove = result["nextEntry"]
             else:
                 doc_id_to_remove = None
 
-            self.delete_doc_by_prop(remove_id, "_id", database, self.ANNOTATION_DATA_COLLECTION)
+            self.delete_doc_by_prop(
+                remove_id, "_id", database, self.ANNOTATION_DATA_COLLECTION
+            )
 
-    def delete_doc_by_prop(self, vals: Union[list, str], property: str, database: str, collection):
+    def delete_doc_by_prop(
+        self, vals: Union[list, str], property: str, database: str, collection
+    ):
         filter = []
 
         if not isinstance(vals, list):
@@ -570,7 +625,9 @@ class NovaDBHandler:
 
         return self.client[database][collection].delete_one(filter)
 
-    def get_data_docs_by_prop(self, vals: Union[list, str], property: str, database: str):
+    def get_data_docs_by_prop(
+        self, vals: Union[list, str], property: str, database: str
+    ):
         filter = []
 
         if not isinstance(vals, list):
@@ -581,14 +638,22 @@ class NovaDBHandler:
 
         filter = {"$or": filter}
 
-        result = list(self.client[database][self.ANNOTATION_DATA_COLLECTION].find(filter))[0]
+        result = list(
+            self.client[database][self.ANNOTATION_DATA_COLLECTION].find(filter)
+        )[0]
         if "nextEntry" in result:
             return self.merge_collections(result, database)
 
         return result
 
-    def get_fields_by_properties(self, vals: Union[list, str], property, fields: Union[list, str], database: str,
-                                 collection: str):
+    def get_fields_by_properties(
+        self,
+        vals: Union[list, str],
+        property,
+        fields: Union[list, str],
+        database: str,
+        collection: str,
+    ):
         filter = []
         fields_dict = {}
 
@@ -611,7 +676,7 @@ class NovaDBHandler:
     def merge_collections(self, doc, database):
         next_id = doc["nextEntry"]
         new_doc = self.get_data_docs_by_prop(next_id, "_id", database)
-        doc['labels'] += new_doc['labels']
+        doc["labels"] += new_doc["labels"]
 
         return doc
 
@@ -692,9 +757,9 @@ if __name__ == "__main__":
 
         new_annotator = "schildom"
         new_annos = [
-            {"from": 0, "to": 10, "conf": 1, "name": 'das'},
-            {"from": 20, "to": 25, "conf": 1, "name": 'geht'},
-            {"from": 30, "to": 35, "conf": 1, "name": 'ja'},
+            {"from": 0, "to": 10, "conf": 1, "name": "das"},
+            {"from": 20, "to": 25, "conf": 1, "name": "geht"},
+            {"from": 30, "to": 35, "conf": 1, "name": "ja"},
         ]
 
         db_handler.set_annos(
