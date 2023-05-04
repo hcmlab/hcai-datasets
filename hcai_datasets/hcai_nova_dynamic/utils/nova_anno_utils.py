@@ -148,7 +148,7 @@ class DiscreteAnnotation(Annotation):
         else:
             # Creating numpy array of annotations for fast access
             # Splitting the annotations into interval and data array
-            self.data_interval = self.dataframe[["from", "to"]].values.astype(np.int)
+            self.data_interval = self.dataframe[["from", "to"]].values.astype(int)
             self.data_values = self.dataframe[["id", "conf"]].values
 
     def get_label_for_frame_legacy(self, start, end):
@@ -251,7 +251,7 @@ class FreeAnnotation(Annotation):
         else:
             # Creating numpy array of annotations for fast access
             # Splitting the annotations into interval and data array
-            self.data_interval = self.dataframe[["from", "to"]].values.astype(np.int)
+            self.data_interval = self.dataframe[["from", "to"]].values.astype(int)
             self.data_values = self.dataframe[["name", "conf"]].values
 
     def get_label_for_frame_legacy(self, start, end):
