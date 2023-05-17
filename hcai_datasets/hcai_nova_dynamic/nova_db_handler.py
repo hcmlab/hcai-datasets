@@ -514,17 +514,19 @@ class NovaDBHandler:
         is_valid: bool,
         sr: float,
         dimlabels: list,
+        overwrite: bool = False
     ):
 
         # check if datastream already exists
-        mongo_stream = self.get_docs_by_prop(
-            file_name, "name", database, self.STREAM_COLLECTION
-        )
-        if mongo_stream:
-            print(
-                f"INFO: Stream {file_name} already exists in database. Skip adding stream."
+        if not overwrite:
+            mongo_stream = self.get_docs_by_prop(
+                file_name, "name", database, self.STREAM_COLLECTION
             )
-            return
+            if mongo_stream:
+                print(
+                    f"INFO: Stream {file_name} already exists in database. Skip adding stream."
+                )
+                return
 
         # build doc
         mongo_steam_doc = {

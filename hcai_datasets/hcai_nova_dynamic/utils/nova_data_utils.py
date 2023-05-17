@@ -30,6 +30,7 @@ class Data(ABC):
         file_ext: str = "stream",
         sr: int = 0,
         data_type: nt.DataTypes = None,
+        np_data_type: np.dtype = np.float,
         is_valid: bool = True,
         sample_data_path: str = "",
         sample_data_shape: tuple = None,
@@ -55,10 +56,10 @@ class Data(ABC):
         self.file_ext = file_ext
         self.lazy_loading = lazy_loading
         self.data_type = data_type
+        self.np_data_type = np_data_type
 
         # Set when populate_meta_info is called
         self.sample_data_shape = sample_data_shape
-        self.np_data_type = None
         self.meta_loaded = False
         # self.n_frames_per_window = n_samples_per_window
 
@@ -116,7 +117,7 @@ class Data(ABC):
             start_frame, end_frame = sample_window_from_time_interval(
                 window_start, window_end, self.sr
             )
-            return np.zeros((end_frame - start_frame,), self.sample_data_shape)
+            return np.zeros((end_frame - start_frame,) + self.sample_data_shape).astype(self.np_data_type)
         elif self.lazy_loading:
             return {
                 "frame_start": window_start,
@@ -194,6 +195,10 @@ class AudioData(Data):
         # Overwrite default
         if kwargs.get("sample_data_shape") is None:
             self.sample_data_shape = (1,)
+        if kwargs.get("np_data_type") is None:
+            kwargs.update({"np_data_type": np.float32})
+        kwargs.update({"data_type": nt.DataTypes.AUDIO})
+
         super().__init__(**kwargs)
 
     def _get_info_hook(self):
@@ -253,6 +258,10 @@ class VideoData(Data):
         if kwargs.get("sample_data_shape") is None:
             sample_data_shape = (480, 640, 3)
             kwargs.update({"sample_data_shape": sample_data_shape})
+        if kwargs.get("np_data_type") is None:
+            kwargs.update({"np_data_type": np.uint8})
+        kwargs.update({"data_type": nt.DataTypes.VIDEO})
+
         super().__init__(**kwargs)
 
     def _get_info_hook(self):
@@ -307,6 +316,9 @@ class StreamData(Data):
         if kwargs.get("sample_data_shape") is None:
             sample_data_shape = (1,)
             kwargs.update({"sample_data_shape": sample_data_shape})
+        if kwargs.get("np_data_type") is None:
+            kwargs.update({"np_data_type": np.float32})
+        kwargs.update({"data_type": nt.DataTypes.FEATURE})
 
         super().__init__(**kwargs)
 
