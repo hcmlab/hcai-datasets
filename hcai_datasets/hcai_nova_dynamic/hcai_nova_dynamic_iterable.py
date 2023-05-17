@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import numpy as np
 import os
@@ -77,6 +78,19 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         self.schemes = schemes
         self.data_streams = data_streams
         self.annotator = annotator
+
+        # Sliding window parameters for the main stream
+        self.left_context, self.left_context_unit = ndu.parse_time_str(left_context)
+        self.right_context, self.right_context_unit = ndu.parse_time_str(right_context)
+        self.frame_size, self.frame_size_unit = ndu.parse_time_str(frame_size)
+        if self.frame_size == 0:
+            print(
+                "WARNING: Frame size 0 is invalid. Returning whole session as sample."
+            )
+            self.frame_size = None
+        self.stride, self.stride_unit = ndu.parse_time_str(stride) if stride else self.frame_size, self.frame_size_unit
+
+        #TODO: Remove time dependent variables after refactoring
         self.left_context_ms = ndu.parse_time_string_to_ms(left_context)
         self.right_context_ms = ndu.parse_time_string_to_ms(right_context)
         self.frame_size_ms = (
@@ -99,7 +113,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
         self.end_ms = ndu.parse_time_string_to_ms(end)
         if not self.end_ms:
-            self.end_ms = float("inf")
+            self.end_ms = sys.maxsize #float("inf")
 
         self.flatten_samples = flatten_samples
         self.add_rest_class = add_rest_class
@@ -280,7 +294,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                     sample_stream_name,
                 )
                 dtype = nt.string_to_enum(nt.DataTypes, data_stream["type"])
-                window_size = (self.left_context_ms + self.frame_size_ms + self.right_context_ms) / (1 / data_stream["sr"])
+                #window_size = (self.left_context_ms + self.frame_size_ms + self.right_context_ms) / (1 / data_stream["sr"])
                 # TODO
                 try:
                     if dtype == nt.DataTypes.VIDEO:
@@ -362,6 +376,59 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 else:
                     raise fnf
 
+    def _build_sample_dict(self, labels_for_frame, data_for_frame):
+        sample_dict = {}
+
+        garbage_detected = False
+        for label_id, label_value in labels_for_frame:
+            # check for nan
+            if (
+                    type(label_value) != list
+                    and type(label_value) != str
+                    and type(label_value) != np.ndarray
+            ):
+                try:
+                    if label_value != label_value:
+                        garbage_detected = True
+                except:
+                    breakpoint()
+            sample_dict.update({label_id: label_value})
+
+        # If at least one label is a garbage label we skip this iteration
+        if garbage_detected:
+            return sample_dict
+
+        for d in data_for_frame:
+            sample_dict.update(d)
+
+        # if self.flatten_samples:
+        #
+        #     # grouping labels and data according to roles
+        #     for role in self.roles:
+        #         # filter dictionary to contain values for role
+        #         sample_dict_for_role = dict(
+        #             filter(lambda elem: role in elem[0], sample_dict.items())
+        #         )
+        #
+        #         # remove role from dictionary keys
+        #         sample_dict_for_role = dict(
+        #             map(
+        #                 lambda elem: (elem[0].replace(role + ".", ""), elem[1]),
+        #                 sample_dict_for_role.items(),
+        #             )
+        #         )
+        #
+        #         sample_dict_for_role["frame"] = (
+        #             str(sample_counter) + "_" + key + "_" + role
+        #         )
+        #         # yield key + '_' + role, sample_dict_for_role
+        #         yield sample_dict_for_role
+        #         sample_counter += 1
+        #     c_pos_ms += _stride_ms
+        #
+        # else:
+        return sample_dict
+
     def _yield_sample(self):
         """Yields examples."""
 
@@ -372,112 +439,89 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
             self._init_session(session)
 
-            session_info = self.session_info[session]
-            dur = session_info["duration"]
-            _frame_size_ms = self.frame_size_ms
-            _stride_ms = self.stride_ms
+            # Iterate through the session using frame based indices
+            if self.stride_unit == ndu.StrideUnit.FRAMES:
 
-            # If we are loading any datastreams we check if any datastream is shorter than the duration stored in the database suggests
-            if self.data_info:
-                dur = min(*[v.dur for k, v in self.data_info.items()], dur)
+                # Setting the main stream as a reference
+                main_stream_id = self.roles[0] + '.' + self.data_streams[0]
+                if main_stream_id not in self.data_info.keys():
+                    print(f'WARNING: Framewise iteration has been requested but main stream "{main_stream_id}" could not be found. Skipping session.')
+                    break
+                print(f'Stride unit has been specified as number of frames. Using "{main_stream_id}" with a sr of {self.data_info[main_stream_id].sr} as main stream.')
+                main_stream = self.data_info[main_stream_id]
+                _frame_size = self.frame_size
+                _stride = self.stride
 
-            if not dur:
-                raise ValueError("Session {} has no duration.".format(session))
+                # Starting position of the first frame in seconds
+                c_pos = max(self.left_context, self.start_ms)
 
-            dur_ms = int(dur * 1000)
+                # If framesize is not specified we return the whole session as one junk
+                if self.frame_size is None:
+                    _frame_size = main_stream.n_frames
+                    _stride =  main_stream.n_frames
 
-            # If framesize is not specified we return the whole session as one junk
-            if self.frame_size_ms is None:
-                _frame_size_ms = min(dur_ms, self.end_ms - self.start_ms)
-                _stride_ms = _frame_size_ms
+                for i in range(0,main_stream.n_frames, _stride):
+                    print('')
 
-            # Starting position of the first frame in seconds
-            # c_pos_ms = self.left_context_ms + self.start_ms
-            c_pos_ms = max(self.left_context_ms, self.start_ms)
+            else:
+                session_info = self.session_info[session]
+                dur = session_info["duration"]
+                _frame_size_ms = self.frame_size_ms
+                _stride_ms = self.stride_ms
 
-            # Generate samples for this session
-            while c_pos_ms + _stride_ms + self.right_context_ms <= min(
-                self.end_ms, dur_ms
-            ):
-                frame_start_ms = c_pos_ms - self.left_context_ms
-                frame_end_ms = c_pos_ms + _frame_size_ms + self.right_context_ms
+                # If we are loading any datastreams we check if any datastream is shorter than the duration stored in the database suggests
+                if self.data_info:
+                    dur = min(*[v.dur for k, v in self.data_info.items()], dur)
 
-                key = (
-                    session
-                    + "_"
-                    + str(frame_start_ms / 1000)
-                    + "_"
-                    + str(frame_end_ms / 1000)
-                )
+                if not dur:
+                    raise ValueError("Session {} has no duration.".format(session))
 
-                labels_for_frame = [
-                    (k, v.get_label_for_frame(frame_start_ms, frame_end_ms))
-                    for k, v in self.annos.items()
-                ]
+                dur_ms = int(dur * 1000)
 
-                data_for_frame = []
+                # If framesize is not specified we return the whole session as one junk
+                if self.frame_size_ms is None:
+                    _frame_size_ms = min(dur_ms, self.end_ms - self.start_ms)
+                    _stride_ms = _frame_size_ms
 
-                for k, v in self.data_info.items():
-                    sample = v.get_sample(frame_start_ms, frame_end_ms)
-                    if sample.shape[0] == 0:
-                        print(f"Sample{frame_start_ms}-{frame_end_ms} is empty")
+                # Starting position of the first frame in seconds
+                # c_pos_ms = self.left_context_ms + self.start_ms
+                c_pos_ms = max(self.left_context_ms, self.start_ms)
+
+                # Generate samples for this session
+                while c_pos_ms + _stride_ms + self.right_context_ms <= min(
+                    self.end_ms, dur_ms
+                ):
+                    frame_start_ms = c_pos_ms - self.left_context_ms
+                    frame_end_ms = c_pos_ms + _frame_size_ms + self.right_context_ms
+
+                    key = (
+                        session
+                        + "_"
+                        + str(frame_start_ms / 1000)
+                        + "_"
+                        + str(frame_end_ms / 1000)
+                    )
+
+                    labels_for_frame = [
+                        (k, v.get_label_for_frame(frame_start_ms, frame_end_ms))
+                        for k, v in self.annos.items()
+                    ]
+                    data_for_frame = []
+
+                    for k, v in self.data_info.items():
+                        sample = v.get_sample(frame_start_ms, frame_end_ms)
+                        if sample.shape[0] == 0:
+                            print(f"Sample{frame_start_ms}-{frame_end_ms} is empty")
+                            c_pos_ms += _stride_ms
+                            continue
+                        data_for_frame.append({k: sample})
+
+                    sample_dict = self._build_sample_dict(labels_for_frame, data_for_frame)
+                    if not sample_dict:
                         c_pos_ms += _stride_ms
-                        continue
-                    data_for_frame.append({k: sample})
-
-                sample_dict = {}
-
-                garbage_detected = False
-                for label_id, label_value in labels_for_frame:
-                    # check for nan
-                    if (
-                        type(label_value) != list
-                        and type(label_value) != str
-                        and type(label_value) != np.ndarray
-                    ):
-                        try:
-                            if label_value != label_value:
-                                garbage_detected = True
-                        except:
-                            breakpoint()
-                    sample_dict.update({label_id: label_value})
-
-                # If at least one label is a garbage label we skip this iteration
-                if garbage_detected:
-                    c_pos_ms += _stride_ms
-                    sample_counter += 1
-                    continue
-
-                for d in data_for_frame:
-                    sample_dict.update(d)
-
-                if self.flatten_samples:
-
-                    # grouping labels and data according to roles
-                    for role in self.roles:
-                        # filter dictionary to contain values for role
-                        sample_dict_for_role = dict(
-                            filter(lambda elem: role in elem[0], sample_dict.items())
-                        )
-
-                        # remove role from dictionary keys
-                        sample_dict_for_role = dict(
-                            map(
-                                lambda elem: (elem[0].replace(role + ".", ""), elem[1]),
-                                sample_dict_for_role.items(),
-                            )
-                        )
-
-                        sample_dict_for_role["frame"] = (
-                            str(sample_counter) + "_" + key + "_" + role
-                        )
-                        # yield key + '_' + role, sample_dict_for_role
-                        yield sample_dict_for_role
                         sample_counter += 1
-                    c_pos_ms += _stride_ms
+                        continue
 
-                else:
-                    sample_dict["frame"] = str(sample_counter) + "_" + key
                     yield sample_dict
                     c_pos_ms += _stride_ms
                     sample_counter += 1

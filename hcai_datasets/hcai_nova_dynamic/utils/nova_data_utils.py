@@ -13,6 +13,13 @@ from hcai_datasets.hcai_nova_dynamic.utils.nova_string_utils import (
 )
 from typing import Union
 from abc import ABC, abstractmethod
+from enum import Enum
+
+
+class StrideUnit(Enum):
+    MILLISECONDS = (0,)
+    SECONDS = (1,)
+    FRAMES = 2
 
 
 class Data(ABC):
@@ -25,6 +32,7 @@ class Data(ABC):
         data_type: nt.DataTypes = None,
         is_valid: bool = True,
         sample_data_path: str = "",
+        sample_data_shape: tuple = None,
         lazy_loading: bool = False,
     ):
         """
@@ -37,6 +45,7 @@ class Data(ABC):
             data_type (DataTypes): Type of the datastream as specified in the nova_utils package under db_utils.nova_types.novDataTypes
             is_valid (bool): Whether the datastream is valid or not
             sample_data_path (str): A path to an example data file from which all meta information that is not saved in the Nova database can be read
+            sample_data_shape (tuple): The default shape of one data sample. Will be overwritten by populate_meta_info if a valid datastream can be found.
             lazy_loading (bool): If set to true only the respective timestamps and filenames will be returned for each window. Not the actual data.
         """
         self.role = role
@@ -48,7 +57,7 @@ class Data(ABC):
         self.data_type = data_type
 
         # Set when populate_meta_info is called
-        self.sample_data_shape = None
+        self.sample_data_shape = sample_data_shape
         self.np_data_type = None
         self.meta_loaded = False
         # self.n_frames_per_window = n_samples_per_window
@@ -93,23 +102,29 @@ class Data(ABC):
                 )
             )
 
-    def get_sample(self, frame_start_ms: int, frame_end_ms: int):
+    def get_sample(
+        self,
+        window_start: int,
+        window_end: int,
+        stride_unit: StrideUnit = StrideUnit.MILLISECONDS,
+    ):
         """
         Returns the sample for the respective frames. If lazy loading is true, only the filepath and frame_start, frame_end will be returned.
         """
 
         if not self.file_reader:
-            start_frame = milli_seconds_to_sample_nr(self.sr, frame_start_ms)
-            end_frame = milli_seconds_to_sample_nr(self.sr, frame_end_ms)
-            return np.zeros(self.sample_data_shape + (end_frame - start_frame,))
+            start_frame, end_frame = sample_window_from_time_interval(
+                window_start, window_end, self.sr
+            )
+            return np.zeros((end_frame - start_frame,), self.sample_data_shape)
         elif self.lazy_loading:
             return {
-                "frame_start": frame_start_ms,
-                "frame_end": frame_end_ms,
+                "frame_start": window_start,
+                "frame_end": window_end,
                 "file_path": self.file_path,
             }
         else:
-            return self._get_sample_hook(frame_start_ms, frame_end_ms)
+            return self._get_sample_hook(window_start, window_end, stride_unit)
 
     def open_file_reader(self, path: str):
         """
@@ -133,9 +148,17 @@ class Data(ABC):
         ...
 
     @abstractmethod
-    def _get_sample_hook(self, window_start_ms: int, window_end_ms: int):
+    def _get_sample_hook(
+        self,
+        window_start: int,
+        window_end: int,
+        stride_unit: StrideUnit = StrideUnit.MILLISECONDS,
+    ):
         """
         Returns a data chunk from window start to window end. The window is automatically adjusted to always provide the same number of data samples.
+
+        Args:
+            stride_unit ():
         """
         ...
 
@@ -168,10 +191,10 @@ class AudioData(Data):
         Args:
             **kwargs ():
         """
-        super().__init__(**kwargs)
-
         # Overwrite default
-        self.sample_data_shape = (1,)
+        if kwargs.get("sample_data_shape") is None:
+            self.sample_data_shape = (1,)
+        super().__init__(**kwargs)
 
     def _get_info_hook(self):
         return merge_role_key(self.role, self.name), {
@@ -179,18 +202,29 @@ class AudioData(Data):
             "dtype": np.float32,
         }
 
-    def _get_sample_hook(self, window_start_ms: int, window_end_ms: int):
-        windows_start_sample, window_end_sample = sample_window_from_interval(
-            window_start_ms, window_end_ms, self.sr
-        )
+    def _get_sample_hook(
+        self,
+        window_start: int,
+        window_end: int,
+        stride_unit: StrideUnit = StrideUnit.FRAMES,
+    ):
+
+        if stride_unit == StrideUnit.FRAMES:
+            window_start_sample = window_start
+            window_end_sample = window_end
+        else:
+            window_start_sample, window_end_sample = sample_window_from_time_interval(
+                window_start, window_end, self.sr
+            )
         chunk = self.file_reader.get_batch(
-            list(range(windows_start_sample, window_end_sample))
+            list(range(window_start_sample, window_end_sample))
         ).asnumpy()
         return chunk
 
     def _open_file_reader_hook(self, path: str):
         self.file_reader = AudioReader(path, ctx=cpu(0), mono=False)
         self.dur = self.file_reader.duration()
+        self.n_frames = len(self.file_reader)
 
     def populate_meta_info(self, path: str):
         """
@@ -215,10 +249,11 @@ class VideoData(Data):
         Args:
             **kwargs ():
         """
-        super().__init__(**kwargs)
-
         # Overwrite default
-        self.sample_data_shape = (480, 640, 3)
+        if kwargs.get("sample_data_shape") is None:
+            sample_data_shape = (480, 640, 3)
+            kwargs.update({"sample_data_shape": sample_data_shape})
+        super().__init__(**kwargs)
 
     def _get_info_hook(self):
         return merge_role_key(self.role, self.name), {
@@ -226,12 +261,22 @@ class VideoData(Data):
             "dtype": np.float32,
         }
 
-    def _get_sample_hook(self, window_start_ms: int, window_end_ms: int):
-        windows_start_sample, window_end_sample = sample_window_from_interval(
-            window_start_ms, window_end_ms, self.sr
-        )
+    def _get_sample_hook(
+        self,
+        window_start: int,
+        window_end: int,
+        stride_unit: StrideUnit = StrideUnit.FRAMES,
+    ):
+        if stride_unit == StrideUnit.FRAMES:
+            window_start_sample = window_start
+            window_end_sample = window_end
+        else:
+            window_start_sample, window_end_sample = sample_window_from_time_interval(
+                window_start, window_end, self.sr
+            )
+
         chunk = self.file_reader.get_batch(
-            list(range(windows_start_sample, window_end_sample))
+            list(range(window_start_sample, window_end_sample))
         ).asnumpy()
         return chunk
 
@@ -240,6 +285,7 @@ class VideoData(Data):
         fps = self.file_reader.get_avg_fps()
         frame_count = len(self.file_reader)
         self.dur = frame_count / fps
+        self.n_frames = len(self.file_reader)
 
     def populate_meta_info(self, path: str):
         file_reader = VideoReader(path)
@@ -257,9 +303,12 @@ class StreamData(Data):
         Args:
             **kwargs ():
         """
-        super().__init__(**kwargs)
         # Overwrite default
-        self.sample_data_shape = (1,)
+        if kwargs.get("sample_data_shape") is None:
+            sample_data_shape = (1,)
+            kwargs.update({"sample_data_shape": sample_data_shape})
+
+        super().__init__(**kwargs)
 
     def _get_info_hook(self):
         return merge_role_key(self.role, self.name), {
@@ -267,18 +316,28 @@ class StreamData(Data):
             "dtype": self.np_data_type,
         }
 
-    def _get_sample_hook(self, window_start_ms: int, window_end_ms: int):
+    def _get_sample_hook(
+        self,
+        window_start: int,
+        window_end: int,
+        stride_unit: StrideUnit = StrideUnit.FRAMES,
+    ):
         try:
             self.data_stream_opend()
-            windows_start_sample, window_end_sample = sample_window_from_interval(
-                window_start_ms, window_end_ms, self.sr
-            )
+            if stride_unit == StrideUnit.FRAMES:
+                window_start_sample = window_start
+                window_end_sample = window_end
+            else:
+                (
+                    window_start_sample,
+                    window_end_sample,
+                ) = sample_window_from_time_interval(window_start, window_end, self.sr)
 
-            return self.file_reader.data[windows_start_sample:window_end_sample]
+            return self.file_reader.data[window_start_sample:window_end_sample]
         except RuntimeError:
             print(
                 "Could not get chunk {}-{} from data stream {}".format(
-                    window_start_ms, window_end_ms, merge_role_key(self.role, self.name)
+                    window_start, window_end, merge_role_key(self.role, self.name)
                 )
             )
 
@@ -286,7 +345,8 @@ class StreamData(Data):
         stream = Stream(path=path)
         if stream:
             self.file_reader = stream
-            self.dur = stream.data.shape[0] / stream.sr
+            self.n_frames = stream.data.shape[0]
+            self.dur = self.n_frames / stream.sr
             return True
         else:
             print("Could not open Stream {}".format(str))
@@ -340,7 +400,33 @@ def milli_seconds_to_sample_nr(time_ms: int, sr: float) -> float:
     return seconds_to_sample_nr(sr=sr, time_s=time_ms / 1000.0)
 
 
-def sample_window_from_interval(
+def sample_nr_to_seconds(sample_nr: float, sr: float) -> float:
+    """
+    Calculates the specific time in seconds in a data stream that corresponds to given sample number
+    Args:
+        sample_nr (float): The unrounded sample number. Might represent a value between to actual samples of the stream.
+        sr (float): The average numbers of samples per second.
+
+    Returns:
+        float: Unrounded time representation of sample_nr specified in seconds
+    """
+    return sample_nr * sr
+
+
+def sample_nr_to_milli_seconds(sample_nr: float, sr: float) -> float:
+    """
+    Calculates the specific time in milli in a data stream that corresponds to given sample number
+    Args:
+        sample_nr (float): The unrounded sample number. Might represent a value between to actual samples of the stream.
+        sr (float): The average numbers of samples per second.
+
+     Returns:
+         float: Unrounded time representation of sample_nr specified in milliseconds
+    """
+    return sample_nr_to_seconds(sample_nr, sr) * 1000.0
+
+
+def sample_window_from_time_interval(
     start_time_ms: int, end_time_ms: int, sr: float
 ) -> tuple[int, int]:
     """
@@ -368,8 +454,8 @@ def sample_window_from_interval(
     number_of_samples = end_sample_nr - start_sample_nr
     sample_diff = number_of_samples - expected_number_of_samples
 
-    # Fewer then expected samples: We pad with samples from the past
-    # More samples than expected: We cut samples from the beginning
+    # Fewer then expected samples: We move start_sample number to the left
+    # More samples than expected: We move start_sample number to the right
     start_sample_nr += sample_diff
 
     assert expected_number_of_samples == end_sample_nr - start_sample_nr
@@ -421,3 +507,66 @@ def parse_time_string_to_ms(frame: Union[str, int, float]) -> int:
     print(
         f'WARNING: Could  not automatically parse time "{frame}" to seconds. Returning None '
     )
+
+
+def parse_time_str(frame: Union[str, int, float]) -> (Union[int, float], StrideUnit):
+
+    if frame is None:
+        print(f"WARNING: No timestring to parse. Returning None ")
+        return None, StrideUnit.MILLISECONDS
+
+    # if frame is specified milliseconds
+    if str(frame).endswith("ms"):
+        try:
+            return int(frame[:-2]), StrideUnit.MILLISECONDS
+        except ValueError:
+            raise ValueError(
+                "Invalid input format for length specified in milliseconds: {}".format(
+                    frame
+                )
+            )
+
+    # if frame is specified in seconds
+    elif str(frame).endswith("s"):
+        try:
+            return float(frame[:-1]), StrideUnit.SECONDS
+        except ValueError:
+            raise ValueError(
+                "Invalid input format for length specified in seconds: {}".format(frame)
+            )
+
+    # if frame is specified in frames
+    elif str(frame).endswith("f"):
+        try:
+            return int(frame[:-1]), StrideUnit.FRAMES
+        except ValueError:
+            raise ValueError(
+                "Invalid input format for length specified in number of frames: {}".format(
+                    frame
+                )
+            )
+    # if type is float we assume the input will be seconds
+    elif isinstance(frame, float) or "." in str(frame):
+        try:
+            print(
+                "WARNING: Automatically inferred type for frame {} is float. Interpreting as seconds".format(
+                    frame
+                )
+            )
+            return float(frame), StrideUnit.SECONDS
+        except ValueError:
+            raise ValueError("Invalid input format for frame: {}".format(frame))
+    # if type is int we assume the input will be milliseconds
+    elif isinstance(frame, int) or (isinstance(frame, str) and frame.isdigit()):
+        try:
+            print(
+                "WARNING: Automatically inferred type for frame {} is int. Interpreting as milliseconds".format(
+                    frame
+                )
+            )
+            return int(frame), StrideUnit.MILLISECONDS
+        except ValueError:
+            raise ValueError("Invalid input format for frame: {}".format(frame))
+
+    print(f'WARNING: Could  not automatically parse time "{frame}". Returning None ')
+    return None, StrideUnit.MILLISECONDS

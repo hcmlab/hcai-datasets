@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from hcai_dataset_utils.dataset_iterable import DatasetIterable
+from nova_utils.interfaces.dataset_iterable import DatasetIterable
 import numpy as np
 
 
