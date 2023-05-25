@@ -62,8 +62,6 @@ setup(
         "decord;platform_machine=='AMD64'",
         "numba",
         "pandas==1.4",
-        "soundfile",
-        "ffmpegio"
     ],
     extras_require={
         "torch": ["torch"],
