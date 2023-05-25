@@ -61,8 +61,8 @@ setup(
         "pymongo==3.12",
         "decord;platform_machine=='AMD64'",
         "numba",
-        "pandas==1.4"
-        "soundfile"
+        "pandas==1.4",
+        "soundfile",
         "ffmpegio"
     ],
     extras_require={
