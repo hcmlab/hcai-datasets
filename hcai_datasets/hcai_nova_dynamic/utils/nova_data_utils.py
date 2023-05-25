@@ -30,7 +30,7 @@ class Data(ABC):
         file_ext: str = "stream",
         sr: int = 0,
         data_type: nt.DataTypes = None,
-        np_data_type: np.dtype = np.float,
+        np_data_type: np.dtype = np.float32,
         is_valid: bool = True,
         sample_data_path: str = "",
         sample_data_shape: tuple = None,

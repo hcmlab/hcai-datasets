@@ -2,7 +2,6 @@ from pathlib import Path
 from hcai_dataset_utils import import_validator
 
 base_dir = Path(__file__).parent
-
 """Image Datasets"""
 if import_validator.validate_installation(
     base_dir / "hcai_affectnet" / "hcai_affectnet.py"
