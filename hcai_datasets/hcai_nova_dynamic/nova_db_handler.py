@@ -211,7 +211,7 @@ class NovaDBHandler:
         collection,
     ):
         """
-        Fetches all annotationobjects that match the specified criteria from the nova database
+        Fetches all annotation objects that match the specified criteria from the nova database
         Args:
           mongo_schemes:
           mongo_sessions:
