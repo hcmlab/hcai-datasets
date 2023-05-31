@@ -382,21 +382,14 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         garbage_detected = False
         for label_id, label_value in labels_for_frame:
             # check for nan
-            if (
-                    type(label_value) != list
-                    and type(label_value) != str
-                    and type(label_value) != np.ndarray
-            ):
-                try:
-                    if label_value != label_value:
-                        garbage_detected = True
-                except:
-                    breakpoint()
+            if label_value != label_value:
+                garbage_detected = True
+
             sample_dict.update({label_id: label_value})
 
         # If at least one label is a garbage label we skip this iteration
         if garbage_detected:
-            return sample_dict
+            return None
 
         for d in data_for_frame:
             sample_dict.update(d)

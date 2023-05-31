@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import sys
 from numba import njit
 from abc import ABC, abstractmethod
 from hcai_datasets.hcai_nova_dynamic.utils.nova_string_utils import merge_role_key
@@ -306,7 +307,9 @@ class FreeAnnotation(Annotation):
 class ContinuousAnnotation(Annotation):
 
     # Class ids and string names as provided from NOVA-DB and required by SSI
-    NOVA_GARBAGE_LABEL_ID = np.NAN
+    NOVA_GARBAGE_LABEL_VALUE = np.NAN
+
+    MISSING_DATA_LABEL_VALUE = sys.float_info.min
 
     def __init__(self, sr=0, min_val=0, max_val=0, **kwargs):
         super().__init__(**kwargs)
@@ -333,15 +336,15 @@ class ContinuousAnnotation(Annotation):
             frame_data = frame[:, 0]
             frame_conf = frame[:, 1]
         else:
-            return self.NOVA_GARBAGE_LABEL_ID
+            return self.MISSING_DATA_LABEL_VALUE
 
         # TODO: Return timeseries instead of average
         conf = sum(frame_conf) / max(len(frame_conf), 1)
         label = sum(frame_data) / max(len(frame_data), 1)
 
         # If frame evaluates to garbage label discard sample
-        if _is_garbage(label, self.NOVA_GARBAGE_LABEL_ID):
-            return Annotation.GARBAGE_LABEL_ID
+        if _is_garbage(label, self.NOVA_GARBAGE_LABEL_VALUE):
+            return Annotation.NOVA_GARBAGE_LABEL_VALUE
         else:
             return label
 
