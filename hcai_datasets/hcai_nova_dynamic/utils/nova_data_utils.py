@@ -194,10 +194,11 @@ class AudioData(Data):
         """
         # Overwrite default
         if kwargs.get("sample_data_shape") is None:
-            self.sample_data_shape = (1,)
+            sample_data_shape = (1,)
+            kwargs.update({"sample_data_shape": sample_data_shape})
         if kwargs.get("np_data_type") is None:
             kwargs.update({"np_data_type": np.float32})
-        kwargs.update({"data_type": nt.DataTypes.AUDIO})
+            kwargs.update({"data_type": nt.DataTypes.AUDIO})
 
         super().__init__(**kwargs)
 
