@@ -35,8 +35,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         data_streams=None,
         start=None,
         end=None,
-        left_context="0s",
-        right_context="0s",
+        left_context=None,
+        right_context=None,
         frame_size=None,
         stride=None,
         add_rest_class=True,
@@ -80,9 +80,11 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         self.annotator = annotator
 
         # Sliding window parameters for the main stream
-        self.left_context, self.left_context_unit = ndu.parse_time_str(left_context)
-        self.right_context, self.right_context_unit = ndu.parse_time_str(right_context)
+        self.left_context, self.left_context_unit = ndu.parse_time_str(left_context if left_context else '0')
+        self.right_context, self.right_context_unit = ndu.parse_time_str(right_context if right_context else '0')
         self.frame_size, self.frame_size_unit = ndu.parse_time_str(frame_size)
+
+        # Framesize 0 or None indicates that the whole session should be returned as one sample
         if self.frame_size == 0:
             print(
                 "WARNING: Frame size 0 is invalid. Returning whole session as sample."
@@ -381,9 +383,14 @@ class HcaiNovaDynamicIterable(DatasetIterable):
 
         garbage_detected = False
         for label_id, label_value in labels_for_frame:
-            # check for nan
-            if label_value != label_value:
-                garbage_detected = True
+            # if value is not list type check for nan
+            if (
+                    type(label_value) != list
+                    and type(label_value) != str
+                    and type(label_value) != np.ndarray
+            ):
+                if label_value != label_value:
+                    garbage_detected = True
 
             sample_dict.update({label_id: label_value})
 
