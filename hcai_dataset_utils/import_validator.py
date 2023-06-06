@@ -1,7 +1,7 @@
 import ast
 from pathlib import Path
 from importlib.util import find_spec
-
+import sys
 
 def get_imports(file_path):
     """Returns a list of imported packages for the respective module"""
@@ -18,6 +18,6 @@ def validate_installation(file_path: Path):
 
     for dependency in dependencies:
         if not find_spec(dependency):
-            print(f"Package {dependency} not installed. Import of {module_id} skipped")
+            #print(f"Package {dependency} not installed. Import of {module_id} skipped")
             return False
     return True
