@@ -514,19 +514,8 @@ class NovaDBHandler:
         is_valid: bool,
         sr: float,
         dimlabels: list,
-        overwrite: bool = False
+        overwrite: bool = False,
     ):
-
-        # check if datastream already exists
-        if not overwrite:
-            mongo_stream = self.get_docs_by_prop(
-                file_name, "name", database, self.STREAM_COLLECTION
-            )
-            if mongo_stream:
-                print(
-                    f"INFO: Stream {file_name} already exists in database. Skip adding stream."
-                )
-                return
 
         # build doc
         mongo_steam_doc = {
@@ -538,22 +527,43 @@ class NovaDBHandler:
             "dimlabels": dimlabels,
         }
 
-        # insert datastream
-        success = self.insert_doc_by_prop(
-            doc=mongo_steam_doc,
-            database=database,
-            collection=self.STREAM_COLLECTION,
+        mongo_stream = self.get_docs_by_prop(
+            file_name, "name", database, self.STREAM_COLLECTION
         )
+
+        if mongo_stream:
+
+            # check if datastream already exists
+            if overwrite:
+                mongo_steam_doc["_id"] = mongo_stream[0]["_id"]
+                success = self.update_doc_by_prop(
+                    doc=mongo_steam_doc,
+                    database=database,
+                    collection=self.STREAM_COLLECTION,
+                )
+            else:
+                print(
+                    f"INFO: Stream {file_name} already exists in database. Skip adding stream."
+                )
+                return
+        else:
+            # insert datastream
+            success = self.insert_doc_by_prop(
+                doc=mongo_steam_doc,
+                database=database,
+                collection=self.STREAM_COLLECTION,
+            )
+            if success.acknowledged:
+                mongo_steam_doc["_id"] = success.inserted_id
 
         if not success.acknowledged:
             warnings.warn(
                 f"Unexpected error adding stream for {database} - {file_name}.{file_ext}. Upload failed."
             )
             return ""
-        else:
-            stream_id = success.inserted_id
 
-        return stream_id
+
+        return mongo_steam_doc["_id"]
 
     def get_mongo_scheme(self, scheme, database):
         mongo_scheme = self.get_docs_by_prop(
