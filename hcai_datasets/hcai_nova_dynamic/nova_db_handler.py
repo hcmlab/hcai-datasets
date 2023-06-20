@@ -518,7 +518,7 @@ class NovaDBHandler:
     ):
 
         # build doc
-        mongo_steam_doc = {
+        mongo_stream_doc = {
             "name": file_name,
             "fileExt": file_ext,
             "type": stream_type,
@@ -535,9 +535,9 @@ class NovaDBHandler:
 
             # check if datastream already exists
             if overwrite:
-                mongo_steam_doc["_id"] = mongo_stream[0]["_id"]
+                mongo_stream_doc["_id"] = mongo_stream[0]["_id"]
                 success = self.update_doc_by_prop(
-                    doc=mongo_steam_doc,
+                    doc=mongo_stream_doc,
                     database=database,
                     collection=self.STREAM_COLLECTION,
                 )
@@ -549,12 +549,12 @@ class NovaDBHandler:
         else:
             # insert datastream
             success = self.insert_doc_by_prop(
-                doc=mongo_steam_doc,
+                doc=mongo_stream_doc,
                 database=database,
                 collection=self.STREAM_COLLECTION,
             )
             if success.acknowledged:
-                mongo_steam_doc["_id"] = success.inserted_id
+                mongo_stream_doc["_id"] = success.inserted_id
 
         if not success.acknowledged:
             warnings.warn(
@@ -563,7 +563,7 @@ class NovaDBHandler:
             return ""
 
 
-        return mongo_steam_doc["_id"]
+        return mongo_stream_doc["_id"]
 
     def get_mongo_scheme(self, scheme, database):
         mongo_scheme = self.get_docs_by_prop(
