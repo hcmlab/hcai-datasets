@@ -455,7 +455,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 # Starting position of the first frame in seconds
                 c_pos = max(self.left_context, self.start_ms)
 
-                # If framesize is not specified we return the whole session as one junk
+                # If frame size is not specified we return the whole session as one junk
                 if self.frame_size is None:
                     _frame_size = main_stream.n_frames
                     _stride =  main_stream.n_frames
@@ -502,6 +502,7 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                         + str(frame_end_ms / 1000)
                     )
 
+                    # TODO: This should only be the label for the frame not the whole window. FIX
                     labels_for_frame = [
                         (k, v.get_label_for_frame(frame_start_ms, frame_end_ms))
                         for k, v in self.annos.items()

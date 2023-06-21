@@ -324,7 +324,7 @@ class ContinuousAnnotation(Annotation):
 
     def set_annotation_from_mongo_doc(self, mongo_doc, time_to_ms=False):
         # Numpy array with shape (len_data, 2) where the second dimension is a respective tuple (confidence, score)
-        self.data = np.array([tuple(i.values()) for i in mongo_doc])
+        self.data = np.array([(i["score"], i["conf"]) for i in mongo_doc])
 
     def get_label_for_frame(self, start, end):
         # returns zero if session duration is longer then labels
@@ -344,7 +344,7 @@ class ContinuousAnnotation(Annotation):
 
         # If frame evaluates to garbage label discard sample
         if _is_garbage(label, self.NOVA_GARBAGE_LABEL_VALUE):
-            return Annotation.NOVA_GARBAGE_LABEL_VALUE
+            return self.NOVA_GARBAGE_LABEL_VALUE
         else:
             return label
 
