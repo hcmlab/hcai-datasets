@@ -491,33 +491,43 @@ class HcaiNovaDynamicIterable(DatasetIterable):
                 while c_pos_ms + _stride_ms + self.right_context_ms <= min(
                     self.end_ms, dur_ms
                 ):
-                    frame_start_ms = c_pos_ms - self.left_context_ms
-                    frame_end_ms = c_pos_ms + _frame_size_ms + self.right_context_ms
 
-                    key = (
+                    frame_start_ms = c_pos_ms
+                    frame_end_ms = c_pos_ms + _frame_size_ms
+
+                    window_start = frame_start_ms - self.left_context_ms
+                    window_end = frame_end_ms + self.right_context_ms
+
+                    #frame_start_ms = c_pos_ms - self.left_context_ms
+                    #frame_end_ms = c_pos_ms + _frame_size_ms + self.right_context_ms
+
+                    window_info = (
                         session
                         + "_"
-                        + str(frame_start_ms / 1000)
+                        + str(window_start / 1000)
                         + "_"
-                        + str(frame_end_ms / 1000)
+                        + str(window_end / 1000)
                     )
 
-                    # TODO: This should only be the label for the frame not the whole window. FIX
-                    labels_for_frame = [
+
+                    # Get label based on frame
+                    labels_for_window = [
                         (k, v.get_label_for_frame(frame_start_ms, frame_end_ms))
                         for k, v in self.annos.items()
                     ]
-                    data_for_frame = []
 
+                    # Get data based on window
+                    data_for_window = []
                     for k, v in self.data_info.items():
-                        sample = v.get_sample(frame_start_ms, frame_end_ms)
+                        sample = v.get_sample(window_start, window_end)
+                        # TODO: Special case with empty streams is probably not working correctly. Verify
                         if sample.shape[0] == 0:
-                            print(f"Sample{frame_start_ms}-{frame_end_ms} is empty")
-                            c_pos_ms += _stride_ms
-                            continue
-                        data_for_frame.append({k: sample})
+                            print(f"Sample{window_start}-{window_end} is empty")
+                            #c_pos_ms += _stride_ms
+                            #continue
+                        data_for_window.append({k: sample})
 
-                    sample_dict = self._build_sample_dict(labels_for_frame, data_for_frame)
+                    sample_dict = self._build_sample_dict(labels_for_window, data_for_window)
                     if not sample_dict:
                         c_pos_ms += _stride_ms
                         sample_counter += 1
