@@ -331,6 +331,10 @@ class ContinuousAnnotation(Annotation):
         s = int(start * self.sr / 1000)
         e = int(end * self.sr / 1000)
 
+        # Assure that indices for array are at least one integer apart
+        if s == e:
+            e = s + 1
+
         if len(self.data) >= e:
             frame = self.data[s:e]
             frame_data = frame[:, 0]
