@@ -342,7 +342,7 @@ class ContinuousAnnotation(Annotation):
         else:
             return self.MISSING_DATA_LABEL_VALUE
 
-        # TODO: Return timeseries instead of average
+        # TODO: Return timeseries instead of averagea
         conf = sum(frame_conf) / max(len(frame_conf), 1)
         label = sum(frame_data) / max(len(frame_data), 1)
 

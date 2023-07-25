@@ -93,8 +93,8 @@ class HcaiNovaDynamicIterable(DatasetIterable):
         self.stride, self.stride_unit = ndu.parse_time_str(stride) if stride else self.frame_size, self.frame_size_unit
 
         #TODO: Remove time dependent variables after refactoring
-        self.left_context_ms = ndu.parse_time_string_to_ms(left_context)
-        self.right_context_ms = ndu.parse_time_string_to_ms(right_context)
+        self.left_context_ms = ndu.parse_time_string_to_ms(left_context) if left_context else 0
+        self.right_context_ms = ndu.parse_time_string_to_ms(right_context) if right_context else 0
         self.frame_size_ms = (
             ndu.parse_time_string_to_ms(frame_size) if frame_size else None
         )
