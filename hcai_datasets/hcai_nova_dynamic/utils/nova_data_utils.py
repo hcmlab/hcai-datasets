@@ -241,7 +241,7 @@ class AudioData(Data):
 
         file_reader = AudioReader(path, ctx=cpu(0), mono=False)
         n_channels = file_reader.shape[0]
-        self.sample_data_shape = (None, n_channels)
+        self.sample_data_shape = (n_channels, None)
         self.meta_loaded = True
 
     def close_file_reader(self):
