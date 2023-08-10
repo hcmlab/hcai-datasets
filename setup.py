@@ -61,7 +61,7 @@ setup(
         "pymongo==3.12",
         "decord;platform_machine=='AMD64'",
         "numba",
-        "pandas==1.4",
+        "pandas",
     ],
     extras_require={
         "torch": ["torch"],
