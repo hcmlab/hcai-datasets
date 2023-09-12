@@ -1,3 +1,5 @@
+## This Repository is deprecated since version 0.1.14 and will not be further developed. Bugfixes might be released if necessary. 
+
 ## Description
 This repository contains code to make datasets stored on the corpora network drive of the chair.
 You can use this project to easily create or reuse a data loader that is universally compatible with either plain python code or tensorflow / pytorch. 
